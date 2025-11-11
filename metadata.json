@@ -1,0 +1,7 @@
+{
+  "name": "SmartVest Registro",
+  "description": "Registro de usuarios para SmartVest con generación de código QR de emergencia y validación de direcciones asistida por IA.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

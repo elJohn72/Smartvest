@@ -1,0 +1,27 @@
+GUÍA DE DESPLIEGUE EN VERCEL
+============================
+
+Vercel es la mejor opción para esta aplicación React/Vite.
+
+MÉTODO RECOMENDADO (VÍA GITHUB)
+-------------------------------
+Es el más fácil y automático.
+
+1. Sube este código a un repositorio en GitHub.
+2. Ve a https://vercel.com y crea una cuenta (inicia sesión con GitHub).
+3. Haz clic en el botón "Add New..." -> "Project".
+4. Selecciona tu repositorio "SmartVest" de la lista.
+5. Vercel detectará automáticamente que es un proyecto "Vite".
+6. **MUY IMPORTANTE - VARIABLES DE ENTORNO**:
+   Antes de darle a "Deploy", busca la sección que dice "Environment Variables" y agrega:
+   - Name: API_KEY
+   - Value: (Copia aquí tu clave de Google Gemini que empieza con AIza...)
+   
+   *Si no haces esto, la validación de direcciones con IA no funcionará.*
+
+7. Haz clic en "Deploy".
+8. Espera unos segundos y tendrás tu URL (ej: smartvest.vercel.app).
+
+NOTA TÉCNICA
+------------
+Se ha incluido el archivo `vercel.json` para manejar el enrutamiento. Esto evita errores 404 al recargar la página en rutas internas.
