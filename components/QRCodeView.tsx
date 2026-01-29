@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { UserData } from '../types';
 import { Button } from './Button';
-import { Download, Eye, Home, FileText, Link as LinkIcon, Globe, Share2 } from 'lucide-react';
+import { Download, Home, FileText, Link as LinkIcon, Globe, Share2 } from 'lucide-react';
 
 interface Props {
   user: UserData;

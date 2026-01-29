@@ -17,7 +17,7 @@ let currentData: IotData = {
   batteryLevel: 85
 };
 
-export const subscribeToDevice = (deviceId: string, callback: IoTListener) => {
+export const subscribeToDevice = (_deviceId: string, callback: IoTListener) => {
   listeners.push(callback);
   // Send immediate current state
   callback(currentData);

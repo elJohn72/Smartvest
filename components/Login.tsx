@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Input } from './Input';
 import { Button } from './Button';
-import { LogIn, ScanLine, ArrowRight } from 'lucide-react';
+import { ScanLine, ArrowRight } from 'lucide-react';
 
 interface Props {
   onLoginSuccess: (id: string) => void;

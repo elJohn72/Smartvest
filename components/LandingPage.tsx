@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from './Button';
-import { LogIn, UserPlus, ShieldCheck, Activity, MapPin, Mail, Phone, Map, Users, Heart, Target, Battery, AlertTriangle, Eye, Accessibility } from 'lucide-react';
+import { LogIn, UserPlus, Activity, MapPin, Mail, Phone, Map, Users, Heart, Target, Battery, AlertTriangle, Accessibility, Eye } from 'lucide-react';
 
 interface Props {
   onLogin: () => void;

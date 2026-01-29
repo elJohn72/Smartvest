@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
   
   return {
     plugins: [react()],
+    base: '/Smartvest/',
     define: {
       // Esto permite que 'process.env.API_KEY' funcione en el navegador
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
