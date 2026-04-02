@@ -1,61 +1,161 @@
-
 import { IotData } from '../types';
 
-// Simple event bus for demo purposes. 
-// In production, this would be a WebSocket connection or Firebase subscription.
-
 type IoTListener = (data: IotData) => void;
-const listeners: IoTListener[] = [];
 
-// Initial mock state
-let currentData: IotData = {
+const listeners = new Map<string, IoTListener[]>();
+const pollingIntervals = new Map<string, number>();
+
+const defaultDeviceState: IotData = {
   deviceId: 'VEST-DEMO',
+  distanceCm: 85,
   latitude: -0.180653,
-  longitude: -78.467834, // Example coordinates (Quito, Ecuador)
+  longitude: -78.467834,
   sosActive: false,
   lastUpdate: Date.now(),
-  batteryLevel: 85
+  batteryLevel: 85,
 };
 
-export const subscribeToDevice = (_deviceId: string, callback: IoTListener) => {
-  listeners.push(callback);
-  // Send immediate current state
-  callback(currentData);
+const deviceStates = new Map<string, IotData>([[defaultDeviceState.deviceId, defaultDeviceState]]);
+
+const getApiBasePath = (): string => {
+  if (typeof window === 'undefined') {
+    return '/api';
+  }
+
+  const { pathname } = window.location;
+
+  if (pathname.includes('/dist/')) {
+    return `${pathname.split('/dist/')[0]}/api`;
+  }
+
+  const [firstSegment] = pathname.split('/').filter(Boolean);
+  return firstSegment ? `/${firstSegment}/api` : '/api';
+};
+
+const buildApiUrl = (endpoint: string): string => `${getApiBasePath()}/${endpoint}`;
+
+const getDeviceState = (deviceId: string): IotData => {
+  const existingState = deviceStates.get(deviceId);
+  if (existingState) {
+    return existingState;
+  }
+
+  const seededState = {
+    ...defaultDeviceState,
+    deviceId,
+    lastUpdate: Date.now(),
+  };
+
+  deviceStates.set(deviceId, seededState);
+  return seededState;
+};
+
+const notifyListeners = (deviceId: string, data: IotData) => {
+  (listeners.get(deviceId) || []).forEach(listener => listener(data));
+};
+
+const syncDeviceState = async (deviceId: string): Promise<void> => {
+  try {
+    const response = await fetch(`${buildApiUrl('iot.php')}?deviceId=${encodeURIComponent(deviceId)}`);
+
+    if (!response.ok) {
+      throw new Error('API unavailable');
+    }
+
+    const payload = await response.json();
+    if (!payload.data) {
+      return;
+    }
+
+    deviceStates.set(deviceId, payload.data);
+    notifyListeners(deviceId, payload.data);
+  } catch (_error) {
+    const localState = getDeviceState(deviceId);
+    notifyListeners(deviceId, localState);
+  }
+};
+
+const startPolling = (deviceId: string) => {
+  if (pollingIntervals.has(deviceId) || typeof window === 'undefined') {
+    return;
+  }
+
+  const intervalId = window.setInterval(() => {
+    void syncDeviceState(deviceId);
+  }, 3000);
+
+  pollingIntervals.set(deviceId, intervalId);
+};
+
+const stopPolling = (deviceId: string) => {
+  const intervalId = pollingIntervals.get(deviceId);
+  if (intervalId === undefined) {
+    return;
+  }
+
+  window.clearInterval(intervalId);
+  pollingIntervals.delete(deviceId);
+};
+
+export const subscribeToDevice = (deviceId: string, callback: IoTListener) => {
+  const currentListeners = listeners.get(deviceId) || [];
+  listeners.set(deviceId, [...currentListeners, callback]);
+
+  callback(getDeviceState(deviceId));
+  void syncDeviceState(deviceId);
+  startPolling(deviceId);
   
   return () => {
-    const index = listeners.indexOf(callback);
-    if (index > -1) listeners.splice(index, 1);
+    const registeredListeners = listeners.get(deviceId) || [];
+    const nextListeners = registeredListeners.filter(listener => listener !== callback);
+    listeners.set(deviceId, nextListeners);
+
+    if (nextListeners.length === 0) {
+      stopPolling(deviceId);
+    }
   };
 };
 
-// This function represents the endpoint your ESP32 would hit
-export const receiveDeviceUpdate = (data: Partial<IotData>) => {
-  currentData = { ...currentData, ...data, lastUpdate: Date.now() };
-  console.log("📡 [IOT] Update Received:", currentData);
-  
-  // Notify all listeners (React Components)
-  listeners.forEach(cb => cb(currentData));
+export const receiveDeviceUpdate = async (data: Partial<IotData>) => {
+  const deviceId = data.deviceId || defaultDeviceState.deviceId;
+  const currentData = getDeviceState(deviceId);
+  const nextData = { ...currentData, ...data, deviceId, lastUpdate: Date.now() };
+
+  deviceStates.set(deviceId, nextData);
+  notifyListeners(deviceId, nextData);
+
+  try {
+    await fetch(buildApiUrl('iot.php'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(nextData),
+    });
+  } catch (_error) {
+    // Fallback local: keep the last in-memory state when the PHP API is not available.
+  }
 };
 
-// --- SIMULATION TOOLS FOR DEMO ---
-export const simulateMovement = () => {
+export const simulateMovement = (deviceId: string = defaultDeviceState.deviceId) => {
+  const currentData = getDeviceState(deviceId);
   const moveAmount = 0.001;
   const newLat = currentData.latitude + (Math.random() - 0.5) * moveAmount;
   const newLng = currentData.longitude + (Math.random() - 0.5) * moveAmount;
-  
-  receiveDeviceUpdate({
+
+  void receiveDeviceUpdate({
+    deviceId,
     latitude: newLat,
-    longitude: newLng
+    longitude: newLng,
   });
 };
 
-export const simulateSOS = (active: boolean) => {
-  receiveDeviceUpdate({ sosActive: active });
+export const simulateSOS = (active: boolean, deviceId: string = defaultDeviceState.deviceId) => {
+  void receiveDeviceUpdate({ deviceId, sosActive: active });
 };
 
-// Expose to window for console testing
-(window as any).smartVestIoT = {
+(window as typeof window & { smartVestIoT?: unknown }).smartVestIoT = {
   receiveDeviceUpdate,
   simulateMovement,
-  simulateSOS
+  simulateSOS,
 };

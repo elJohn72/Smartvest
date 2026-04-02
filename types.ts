@@ -25,6 +25,7 @@ export interface UserData {
 
 export interface IotData {
   deviceId: string;
+  distanceCm?: number | null;
   latitude: number;
   longitude: number;
   sosActive: boolean;

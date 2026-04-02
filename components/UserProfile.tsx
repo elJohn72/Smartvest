@@ -14,20 +14,20 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
   const [iotData, setIotData] = useState<IotData | null>(null);
   const [isSOS, setIsSOS] = useState(false);
   const [showDevModal, setShowDevModal] = useState(false);
+  const deviceId = user.deviceId || 'VEST-DEMO';
 
   // Subscribe to simulated/real IoT Data
   useEffect(() => {
-    const deviceId = user.deviceId || 'VEST-DEMO';
     const unsubscribe = subscribeToDevice(deviceId, (data) => {
       setIotData(data);
       setIsSOS(data.sosActive);
     });
     return () => unsubscribe();
-  }, [user.deviceId]);
+  }, [deviceId]);
 
   const openMaps = () => {
     if (iotData) {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${iotData.latitude},${iotData.longitude}`, '_blank');
+      window.open(`https://www.google.com/maps/search/?api=1&query=${iotData.latitude},${iotData.longitude}`, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -57,11 +57,11 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
              >
                <Navigation /> Ver Ubicación
              </button>
-             <button 
-                onClick={() => simulateSOS(false)} 
-                className="mt-8 text-sm underline opacity-80 hover:opacity-100"
-             >
-               Desactivar Alerta (Simulación)
+              <button 
+                 onClick={() => simulateSOS(false, deviceId)} 
+                 className="mt-8 text-sm underline opacity-80 hover:opacity-100"
+              >
+                Desactivar Alerta (Simulación)
              </button>
            </div>
         </div>
@@ -88,6 +88,7 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
                         <p className="text-gray-500 mb-2">// Payload JSON</p>
                         <pre>{`{
   "deviceId": "${user.deviceId || 'VEST-001'}",
+  "distanceCm": 85.4,
   "latitude": -0.180653,
   "longitude": -78.467834,
   "sosActive": true,
@@ -198,12 +199,29 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
             <div className="mt-4 pt-4 border-t border-dashed border-slate-200">
                 <p className="text-xs text-gray-400 uppercase font-bold mb-2">Simulación (Solo Demo)</p>
                 <div className="flex gap-2">
-                    <button onClick={simulateMovement} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-medium text-slate-600">
+                    <button onClick={() => simulateMovement(deviceId)} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-medium text-slate-600">
                         Mover GPS
                     </button>
-                    <button onClick={() => simulateSOS(true)} className="px-3 py-1 bg-red-100 hover:bg-red-200 rounded text-xs font-medium text-red-600">
+                    <button onClick={() => simulateSOS(true, deviceId)} className="px-3 py-1 bg-red-100 hover:bg-red-200 rounded text-xs font-medium text-red-600">
                         Activar SOS
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
+            <h3 className="font-bold text-slate-400 text-sm uppercase tracking-wider mb-4">Sensado de Obstáculos</h3>
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-500">
+                    <AlertTriangle size={24} />
+                </div>
+                <div>
+                    <p className="font-bold text-lg text-slate-800">
+                        {iotData?.distanceCm !== null && iotData?.distanceCm !== undefined ? `${iotData.distanceCm.toFixed(1)} cm` : 'Sin lectura'}
+                    </p>
+                    <p className="text-slate-500 text-sm">
+                        Distancia frontal detectada por el SmartVest.
+                    </p>
                 </div>
             </div>
         </div>

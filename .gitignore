@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.pio
+firmware/esp32/platformio-smartvest/include/smartvest_config.h
 
 # Editor directories and files
 .vscode/*

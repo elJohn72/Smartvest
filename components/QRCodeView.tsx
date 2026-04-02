@@ -14,6 +14,18 @@ export const QRCodeView: React.FC<Props> = ({ user, onBackHome }) => {
   const qrRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'data' | 'link'>('data'); 
 
+  const getPublicProfile = () => ({
+    id: user.id,
+    fullName: user.fullName,
+    age: user.age,
+    bloodType: user.bloodType,
+    emergencyPhone: user.emergencyPhone,
+    emergencyContact: user.emergencyContact,
+    medicalObservations: user.medicalObservations,
+    deviceId: user.deviceId,
+    photo: user.photo,
+  });
+
   const downloadQR = () => {
     const canvas = qrRef.current?.querySelector('canvas');
     if (canvas) {
@@ -30,10 +42,10 @@ export const QRCodeView: React.FC<Props> = ({ user, onBackHome }) => {
   // Generate QR Data
   const getQRData = () => {
     if (mode === 'link') {
-        // PORTABLE LINK STRATEGY:
-        // Encode the full user object into the URL so it works on other devices without a database.
+        // Public monitoring link: enough data to identify the user and device,
+        // without exposing credentials or the full private record in the QR.
         try {
-            const jsonString = JSON.stringify(user);
+            const jsonString = JSON.stringify(getPublicProfile());
             // Safe Base64 encoding for UTF-8 strings (handles accents properly)
             const encodedData = btoa(unescape(encodeURIComponent(jsonString)));
             
@@ -41,7 +53,6 @@ export const QRCodeView: React.FC<Props> = ({ user, onBackHome }) => {
             const path = window.location.pathname;
             const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
             
-            // The URL will contain the data parameter
             return `${origin}${cleanPath}?data=${encodedData}`;
         } catch (e) {
             console.error("Error encoding data", e);
@@ -101,11 +112,11 @@ OBSERVACIONES: ${user.medicalObservations}`;
             </p>
         ) : (
              <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm mb-4 flex items-start gap-2 text-left max-w-md mx-auto border border-blue-100">
-                <Share2 size={16} className="mt-0.5 flex-shrink-0" />
-                <p>
-                    <strong>Enlace Inteligente:</strong> Este QR contiene toda la información en el enlace. Cuando subas la app a tu hosting, cualquiera que lo escanee verá el perfil completo <strong>aunque no tengan la base de datos</strong>.
-                </p>
-            </div>
+                 <Share2 size={16} className="mt-0.5 flex-shrink-0" />
+                 <p>
+                    <strong>Enlace de monitoreo:</strong> Este QR identifica a la persona y al chaleco para abrir el perfil de seguimiento desde otros dispositivos, sin incluir usuario ni contrasena en el enlace.
+                 </p>
+             </div>
         )}
 
         {/* QR Display */}
@@ -137,6 +148,7 @@ OBSERVACIONES: ${user.medicalObservations}`;
             <div className="overflow-hidden">
                 <h3 className="font-bold text-smart-dark truncate">{user.fullName}</h3>
                 <p className="text-gray-500 text-xs">Contacto: {user.emergencyPhone}</p>
+                <p className="text-gray-400 text-xs font-mono truncate">Dispositivo: {user.deviceId || 'VEST-DEMO'}</p>
             </div>
         </div>
       </div>

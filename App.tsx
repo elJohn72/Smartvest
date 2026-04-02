@@ -8,8 +8,43 @@ import { UserProfile } from './components/UserProfile';
 import { Login } from './components/Login';
 import { Button } from './components/Button';
 import { AppScreen, UserData } from './types';
-import { saveUser, getUserById } from './services/storageService';
+import { saveUser, getUserById, loginUser } from './services/storageService';
 import './services/iotService'; 
+
+const createImportedUser = (payload: Partial<UserData>): UserData | null => {
+  if (
+    !payload.id ||
+    !payload.fullName ||
+    typeof payload.age !== 'number' ||
+    !payload.bloodType ||
+    !payload.emergencyPhone ||
+    !payload.emergencyContact?.name ||
+    !payload.emergencyContact?.relationship
+  ) {
+    return null;
+  }
+
+  return {
+    id: payload.id,
+    fullName: payload.fullName,
+    nationalId: payload.nationalId || '',
+    age: payload.age,
+    bloodType: payload.bloodType,
+    address: payload.address || '',
+    emergencyPhone: payload.emergencyPhone,
+    emergencyContact: {
+      name: payload.emergencyContact.name,
+      relationship: payload.emergencyContact.relationship,
+      phone: payload.emergencyContact.phone || payload.emergencyPhone,
+    },
+    medicalObservations: payload.medicalObservations || 'Ninguna',
+    createdAt: payload.createdAt || new Date().toISOString(),
+    photo: payload.photo,
+    username: undefined,
+    password: undefined,
+    deviceId: payload.deviceId || 'VEST-DEMO',
+  };
+};
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.LANDING);
@@ -18,20 +53,21 @@ const App: React.FC = () => {
 
   // Check for URL parameters on mount (Handling both Local ID and Portable Data Links)
   useEffect(() => {
+    const hydrateFromUrl = async () => {
     if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         
-        // OPTION A: Portable Link (Contains the full data)
+        // OPTION A: Monitoring Link (Contains only the public profile needed to identify the vest)
         const encodedData = params.get('data');
         if (encodedData) {
             try {
                 // Decode safe Base64 (Reverse the encoding from QRCodeView)
                 const jsonString = decodeURIComponent(escape(atob(encodedData)));
-                const importedUser: UserData = JSON.parse(jsonString);
+                const importedUser = createImportedUser(JSON.parse(jsonString));
                 
                 if (importedUser && importedUser.id) {
-                    // Automatically save this user to this device's history
-                    saveUser(importedUser);
+                    // Save the imported public profile so the monitor can reopen it locally later.
+                    await saveUser(importedUser);
                     setCurrentUser(importedUser);
                     setCurrentScreen(AppScreen.PROFILE);
                     return; // Stop processing
@@ -46,7 +82,7 @@ const App: React.FC = () => {
         // OPTION B: Local ID Link (Only works if data is already on device)
         const uid = params.get('uid');
         if (uid) {
-          const foundUser = getUserById(uid);
+          const foundUser = await getUserById(uid);
           if (foundUser) {
             setCurrentUser(foundUser);
             setCurrentScreen(AppScreen.PROFILE);
@@ -56,6 +92,9 @@ const App: React.FC = () => {
           }
         }
     }
+    };
+
+    void hydrateFromUrl();
   }, []);
 
   const handleNewRegister = () => {
@@ -67,20 +106,31 @@ const App: React.FC = () => {
     setCurrentScreen(AppScreen.LOGIN);
   };
 
-  const handleRegisterSubmit = (user: UserData) => {
-    saveUser(user);
+  const handleRegisterSubmit = async (user: UserData) => {
+    await saveUser(user);
     setCurrentUser(user);
     setCurrentScreen(AppScreen.QR_VIEW);
   };
 
-  const handleLoginSuccess = (id: string) => {
-    const user = getUserById(id);
+  const handleLoginSuccess = async (id: string) => {
+    const user = await getUserById(id);
     if (user) {
         setCurrentUser(user);
         setCurrentScreen(AppScreen.PROFILE);
     } else {
-        alert("Usuario no encontrado con ese ID.");
+        throw new Error('Usuario no encontrado con ese ID.');
     }
+  };
+
+  const handleCredentialLogin = async (username: string, password: string) => {
+    const user = await loginUser(username, password);
+
+    if (!user) {
+      throw new Error('No se encontró el usuario.');
+    }
+
+    setCurrentUser(user);
+    setCurrentScreen(AppScreen.PROFILE);
   };
 
   const handleBackHome = () => {
@@ -111,6 +161,7 @@ const App: React.FC = () => {
         {currentScreen === AppScreen.LOGIN && (
             <Login 
                 onLoginSuccess={handleLoginSuccess}
+                onCredentialLogin={handleCredentialLogin}
                 onCancel={handleBackHome}
             />
         )}

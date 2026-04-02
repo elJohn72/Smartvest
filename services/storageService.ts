@@ -3,30 +3,130 @@ import { UserData } from '../types';
 
 const STORAGE_KEY = 'smartvest_users';
 
-export const saveUser = (user: UserData): void => {
-  const users = getUsers();
-  // Check if user exists, update if so, otherwise push
+const getLocalUsers = (): UserData[] => {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored ? JSON.parse(stored) : [];
+};
+
+const saveLocalUsers = (users: UserData[]): void => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+};
+
+const upsertLocalUser = (user: UserData): void => {
+  const users = getLocalUsers();
   const index = users.findIndex(u => u.id === user.id);
+
   if (index >= 0) {
     users[index] = user;
   } else {
     users.push(user);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+
+  saveLocalUsers(users);
 };
 
-export const getUsers = (): UserData[] => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return stored ? JSON.parse(stored) : [];
+const getApiBasePath = (): string => {
+  if (typeof window === 'undefined') {
+    return '/api';
+  }
+
+  const { pathname } = window.location;
+
+  if (pathname.includes('/dist/')) {
+    return `${pathname.split('/dist/')[0]}/api`;
+  }
+
+  const [firstSegment] = pathname.split('/').filter(Boolean);
+  return firstSegment ? `/${firstSegment}/api` : '/api';
 };
 
-export const getUserById = (id: string): UserData | undefined => {
-  const users = getUsers();
-  return users.find(u => u.id === id);
+const buildApiUrl = (endpoint: string): string => `${getApiBasePath()}/${endpoint}`;
+
+const isSuccessfulResponse = (response: Response): boolean => response.ok;
+
+export const saveUser = async (user: UserData): Promise<void> => {
+  try {
+    const response = await fetch(buildApiUrl('users.php'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(user),
+    });
+
+    if (!isSuccessfulResponse(response)) {
+      throw new Error('API unavailable');
+    }
+  } catch (_error) {
+    upsertLocalUser(user);
+  }
 };
 
-export const exportToCSV = (): void => {
-  const users = getUsers();
+export const getUsers = async (): Promise<UserData[]> => {
+  try {
+    const response = await fetch(buildApiUrl('users.php'));
+
+    if (!isSuccessfulResponse(response)) {
+      throw new Error('API unavailable');
+    }
+
+    const payload = await response.json();
+    if (Array.isArray(payload.users)) {
+      saveLocalUsers(payload.users);
+      return payload.users;
+    }
+  } catch (_error) {
+    return getLocalUsers();
+  }
+
+  return getLocalUsers();
+};
+
+export const getUserById = async (id: string): Promise<UserData | undefined> => {
+  try {
+    const response = await fetch(`${buildApiUrl('users.php')}?id=${encodeURIComponent(id)}`);
+
+    if (!isSuccessfulResponse(response)) {
+      throw new Error('API unavailable');
+    }
+
+    const payload = await response.json();
+    if (payload.user) {
+      upsertLocalUser(payload.user);
+      return payload.user;
+    }
+  } catch (_error) {
+    return getLocalUsers().find(u => u.id === id);
+  }
+
+  return getLocalUsers().find(u => u.id === id);
+};
+
+export const loginUser = async (username: string, password: string): Promise<UserData | undefined> => {
+  const response = await fetch(buildApiUrl('users.php'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action: 'login',
+      username,
+      password,
+    }),
+  });
+
+  const payload = await response.json();
+
+  if (!isSuccessfulResponse(response) || !payload.user) {
+    throw new Error(payload.message || 'No se pudo iniciar sesión.');
+  }
+
+  upsertLocalUser(payload.user);
+  return payload.user;
+};
+
+export const exportToCSV = async (): Promise<void> => {
+  const users = await getUsers();
   if (users.length === 0) {
     alert("No hay registros para exportar.");
     return;
@@ -66,8 +166,8 @@ export const exportToCSV = (): void => {
 };
 
 // Función para guardar respaldo completo (JSON) que se puede restaurar
-export const exportToJSON = (): void => {
-  const users = getUsers();
+export const exportToJSON = async (): Promise<void> => {
+  const users = await getUsers();
   if (users.length === 0) {
     alert("No hay datos para realizar una copia de seguridad.");
     return;
@@ -82,7 +182,7 @@ export const exportToJSON = (): void => {
 };
 
 // Función para restaurar datos desde un archivo JSON
-export const importFromJSON = (jsonString: string): { success: boolean; count: number; message: string } => {
+export const importFromJSON = async (jsonString: string): Promise<{ success: boolean; count: number; message: string }> => {
     try {
         const importedUsers: any[] = JSON.parse(jsonString);
         
@@ -90,7 +190,7 @@ export const importFromJSON = (jsonString: string): { success: boolean; count: n
             return { success: false, count: 0, message: "El archivo no tiene el formato correcto (debe ser una lista)." };
         }
 
-        const currentUsers = getUsers();
+        const currentUsers = await getUsers();
         const userMap = new Map(currentUsers.map(u => [u.id, u]));
         let newCount = 0;
 
@@ -101,8 +201,25 @@ export const importFromJSON = (jsonString: string): { success: boolean; count: n
                 userMap.set(u.id, u);
             }
         });
-        
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(userMap.values())));
+
+        const mergedUsers = Array.from(userMap.values());
+
+        try {
+            const response = await fetch(buildApiUrl('users.php'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action: 'import', users: mergedUsers }),
+            });
+
+            if (!isSuccessfulResponse(response)) {
+                throw new Error('API unavailable');
+            }
+        } catch (_error) {
+            saveLocalUsers(mergedUsers);
+        }
+
         return { success: true, count: newCount, message: `Importación exitosa. ${newCount} usuarios nuevos añadidos.` };
 
     } catch (e) {

@@ -23,10 +23,12 @@ export const Home: React.FC<Props> = ({ onNewRegister }) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      const result = importFromJSON(content);
-      alert(result.message);
-      // Reset input
-      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      void (async () => {
+        const result = await importFromJSON(content);
+        alert(result.message);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      })();
     };
     reader.readAsText(file);
   };
