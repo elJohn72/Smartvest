@@ -83,8 +83,8 @@ export const LandingPage: React.FC<Props> = ({ onLogin, onRegister }) => {
                         <div className="pt-2 pb-4 px-6 bg-white z-10">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden border border-gray-200 ring-2 ring-blue-100">
-                                        <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1000&auto=format&fit=crop" alt="User" className="w-full h-full object-cover"/>
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 overflow-hidden border border-gray-200 ring-2 ring-blue-100 flex items-center justify-center text-white">
+                                        <Accessibility size={20} aria-hidden="true" />
                                     </div>
                                     <div>
                                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Usuario</p>
@@ -232,14 +232,13 @@ export const LandingPage: React.FC<Props> = ({ onLogin, onRegister }) => {
                 </div>
                 <div className="flex-1 relative">
                     <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-2xl transform rotate-3 opacity-20"></div>
-                    {/* 
-                        NOTE: This image is a placeholder resembling the provided device user.
-                        Replace 'https://images.unsplash.com/...' with your actual device image file path.
-                    */}
                     <img 
-                        src="https://images.unsplash.com/photo-1548543604-a87c9909abec?q=80&w=1978&auto=format&fit=crop" 
-                        alt="Usuario SmartVest con dispositivo" 
-                        className="relative rounded-2xl shadow-2xl border-4 border-white w-full h-[500px] object-cover"
+                        src="/Smartvest/images/landing-device.png?v=2"
+                        alt="Persona con chaleco SmartVest de alta visibilidad y sensores de seguridad"
+                        width={768}
+                        height={1024}
+                        loading="lazy"
+                        className="relative rounded-2xl shadow-2xl border-4 border-white w-full h-[500px] object-cover object-center"
                     />
                 </div>
             </div>

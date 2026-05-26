@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="/Users/eljhon72/Repositorios Githup/Portafolio de proyectos/Smart Vest/Smartvest"
+REPO_ROOT="/Users/eljhon72/Repositorios Githup/03-proyectos/Smartvest"
 WEBAPP_DIR="$REPO_ROOT"
 XAMPP_TARGET="/Applications/XAMPP/xamppfiles/htdocs/Smartvest"
 
@@ -22,6 +22,18 @@ fi
 if [[ -d "$WEBAPP_DIR/dist/assets" ]]; then
   rm -rf "$XAMPP_TARGET/assets"
   cp -R "$WEBAPP_DIR/dist/assets" "$XAMPP_TARGET/assets"
+fi
+
+if [[ -d "$WEBAPP_DIR/public" ]]; then
+  cp -R "$WEBAPP_DIR/public/." "$XAMPP_TARGET/"
+fi
+
+if [[ -f "$WEBAPP_DIR/dist/robots.txt" ]]; then
+  cp "$WEBAPP_DIR/dist/robots.txt" "$XAMPP_TARGET/robots.txt"
+fi
+
+if [[ -f "$WEBAPP_DIR/dist/sitemap.xml" ]]; then
+  cp "$WEBAPP_DIR/dist/sitemap.xml" "$XAMPP_TARGET/sitemap.xml"
 fi
 
 echo "Publicacion completada en: $XAMPP_TARGET"

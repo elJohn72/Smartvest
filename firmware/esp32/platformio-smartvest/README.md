@@ -1,5 +1,7 @@
 # SmartVest PlatformIO
 
+Firmware del chaleco inteligente (ESP32). Documentación general del sistema: [docs/PROYECTO.md](../../../docs/PROYECTO.md) · API IoT: [docs/API.md](../../../docs/API.md).
+
 Firmware base alineado al esquematico `Schematic_Proyecto-No-Vidente_2025-11-20 (1).png`.
 
 ## Hardware identificado
@@ -35,14 +37,17 @@ Firmware base alineado al esquematico `Schematic_Proyecto-No-Vidente_2025-11-20 
 - Detecta boton SOS
 - Emite telemetria JSON por Serial
 - Puede publicar estado IoT al backend `api/iot.php`
-- Puede enviar SMS por SIM800L si habilitas la opcion
+- Envía SMS por SIM800L al pulsar SOS (configurado: **+593993212257** / 0993212257) — ver [docs/SMS-SOS-EMERGENCIA.md](../../../docs/SMS-SOS-EMERGENCIA.md)
 
 ## Configuracion
 
 1. Copia `include/smartvest_config.h.example` a `include/smartvest_config.h`
 2. Ajusta `SMARTVEST_DEVICE_ID`
-3. Si vas a publicar a la app web, habilita WiFi y coloca la URL completa de `api/iot.php`
-4. Si vas a usar SOS por SMS, habilita SIM800L y coloca el numero destino
+3. Si vas a publicar a la app web, habilita WiFi y coloca la URL completa de `api/iot.php` (usa la **IP de tu PC** en la red, no `localhost`)
+4. Define `SMARTVEST_IOT_API_KEY` igual que en `api/config.local.php` o el valor por defecto del servidor (`smartvest-local-dev-key` en desarrollo)
+5. Si vas a usar SOS por SMS, habilita SIM800L y coloca el numero destino
+
+El firmware envia la cabecera HTTP `X-SmartVest-Api-Key` en cada POST a `iot.php`.
 
 ## Compilar
 
@@ -69,5 +74,5 @@ Cada segundo imprime una linea JSON como:
 
 - Aqui se priorizo el `.ino` viejo que ya estaba funcionando: `TRIG=5`, `ECHO=18`.
 - El reporte tecnico menciona proteccion ECHO con diodos, pero el esquematico muestra divisor resistivo `2k/1k`; para firmware esto no cambia el pin, pero conviene validar la PCB real.
-- No se observa divisor dedicado para medicion real de bateria hacia ADC; por eso `batteryLevel` sale `null` por defecto.
+- **Batería:** el esquema no trae divisor de tensión hacia un ADC del ESP32. Por defecto `SMARTVEST_BATTERY_ADC_PIN` es `-1` y la web muestra «Sin sensor en PCB». Si añades un divisor (p. ej. 100k/100k) desde el pack de batería a **GPIO34** (solo entrada), define `#define SMARTVEST_BATTERY_ADC_PIN 34` en `smartvest_config.h` y calibra los valores en `updateBatteryLevel()`.
 - La UART con ESP32-CAM aparece etiquetada como `UOR/UOT`, pero el cruce RX/TX debe validarse fisicamente antes de usarla.

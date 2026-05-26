@@ -3,19 +3,22 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartVest Registro</title>
-    <link rel="manifest" href="./manifest.json">
-    
-    <!-- Estilos y Fuentes -->
+    <meta name="description" content="SmartVest: registro de perfil médico de emergencia, monitoreo IoT del chaleco y alertas SOS para personas con discapacidad visual." />
+    <meta name="theme-color" content="#1e40af" />
+    <meta property="og:title" content="SmartVest — Sistema de Emergencia" />
+    <meta property="og:description" content="Perfil médico, QR de emergencia y monitoreo en tiempo real del chaleco inteligente." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_EC" />
+    <title>SmartVest — Sistema de Emergencia</title>
+    <link rel="manifest" href="/Smartvest/manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-      body { font-family: 'Inter', sans-serif; }
-      /* Animaciones para transiciones suaves */
-      .fade-in { animation: fadeIn 0.3s ease-in-out; }
-      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    </style>
 </head>
 <body class="bg-smart-light text-smart-dark antialiased min-h-screen flex flex-col">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-smart-dark focus:shadow-lg">
+        Saltar al contenido principal
+    </a>
     <div id="root" class="flex-grow flex flex-col"></div>
     <script type="module" src="./index.tsx"></script>
 </body>

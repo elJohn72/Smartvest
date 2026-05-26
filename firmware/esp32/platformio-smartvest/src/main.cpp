@@ -34,6 +34,10 @@
 #define SMARTVEST_ENABLE_SIM800 false
 #endif
 
+#ifndef SMARTVEST_BATTERY_ADC_PIN
+#define SMARTVEST_BATTERY_ADC_PIN -1
+#endif
+
 #ifndef SMARTVEST_SOS_PHONE
 #define SMARTVEST_SOS_PHONE "+593000000000"
 #endif
@@ -52,7 +56,7 @@ constexpr uint8_t gsmTx = 17;
 
 constexpr uint8_t camRx = 23;
 constexpr uint8_t camTx = 22;
-constexpr int8_t batteryAdc = -1;
+constexpr int8_t batteryAdc = SMARTVEST_BATTERY_ADC_PIN;
 }
 
 HardwareSerial gpsSerial(1);
@@ -101,11 +105,13 @@ constexpr unsigned long kUltrasonicTimeoutUs = 30000UL;
 constexpr unsigned long kDistanceReadIntervalMs = 150UL;
 constexpr unsigned long kTelemetryIntervalMs = 1000UL;
 constexpr unsigned long kWifiRetryIntervalMs = 10000UL;
+constexpr unsigned long kHttpIntervalSosMs = 2000UL;
 constexpr float kDangerDistanceCm = 40.0f;
 constexpr float kAlertDistanceCm = 100.0f;
 constexpr float kCautionDistanceCm = 200.0f;
 
 float measureDistanceCm();
+float measureDistanceCmFiltered();
 void processGpsStream();
 bool parseGprmc(const String& line);
 double nmeaToDecimal(const String& raw, char hemisphere);
@@ -113,6 +119,7 @@ ObstacleLevel getObstacleLevel(float distanceCm);
 const char* obstacleLevelToText(ObstacleLevel level);
 AlertPattern getPatternForDistance(float distanceCm);
 void applyAlertPattern();
+void applySosAlertPattern();
 void updateBatteryLevel();
 void ensureWifiConnection();
 void publishTelemetryToApi();
@@ -138,6 +145,11 @@ void setup() {
   gpsSerial.begin(9600, SERIAL_8N1, Pins::gpsRx, Pins::gpsTx);
   gsmSerial.begin(9600, SERIAL_8N1, Pins::gsmRx, Pins::gsmTx);
 
+  if (Pins::batteryAdc >= 0) {
+    analogReadResolution(12);
+    analogSetAttenuation(ADC_11db);
+  }
+
   WiFi.mode(WIFI_STA);
 
   if (SMARTVEST_ENABLE_SIM800) {
@@ -160,7 +172,7 @@ void loop() {
 
   if (now - lastDistanceReadMs >= kDistanceReadIntervalMs) {
     lastDistanceReadMs = now;
-    currentDistanceCm = measureDistanceCm();
+    currentDistanceCm = measureDistanceCmFiltered();
     const AlertPattern nextPattern = getPatternForDistance(currentDistanceCm);
     if (nextPattern.enabled != currentPattern.enabled ||
         nextPattern.periodMs != currentPattern.periodMs ||
@@ -179,7 +191,8 @@ void loop() {
 
     if (SMARTVEST_ENABLE_SIM800) {
       String message = String("ALERTA SOS SmartVest\n") +
-                       "deviceId: " + SMARTVEST_DEVICE_ID + "\n";
+                       "deviceId: " + SMARTVEST_DEVICE_ID + "\n" +
+                       "Distancia: " + String(currentDistanceCm, 0) + " cm\n";
 
       if (gpsState.fix) {
         message += "Mapa: https://maps.google.com/?q=";
@@ -187,10 +200,12 @@ void loop() {
         message += ",";
         message += String(gpsState.longitude, 6);
       } else {
-        message += "GPS sin fix valido";
+        message += "GPS sin fix. Abre el perfil web del cuidador.";
       }
 
-      sendSms(message);
+      const bool smsOk = sendSms(message);
+      Serial.print("SMS SOS -> ");
+      Serial.println(smsOk ? "OK" : "FALLO");
     }
   }
 
@@ -198,7 +213,12 @@ void loop() {
     sosEdgeLatched = false;
   }
 
-  applyAlertPattern();
+  if (sosPressed) {
+    applySosAlertPattern();
+  } else {
+    applyAlertPattern();
+  }
+
   ensureWifiConnection();
 
   if (now - lastTelemetryMs >= kTelemetryIntervalMs) {
@@ -206,7 +226,10 @@ void loop() {
     printTelemetry();
   }
 
-  if (SMARTVEST_WIFI_ENABLED && now - lastHttpPublishMs >= SMARTVEST_HTTP_INTERVAL_MS) {
+  const unsigned long httpInterval =
+      sosPressed ? kHttpIntervalSosMs : SMARTVEST_HTTP_INTERVAL_MS;
+
+  if (SMARTVEST_WIFI_ENABLED && now - lastHttpPublishMs >= httpInterval) {
     lastHttpPublishMs = now;
     publishTelemetryToApi();
   }
@@ -225,6 +248,27 @@ float measureDistanceCm() {
   }
 
   return (duration * 0.0343f) / 2.0f;
+}
+
+float measureDistanceCmFiltered() {
+  float samples[3] = {9999.0f, 9999.0f, 9999.0f};
+
+  for (int i = 0; i < 3; ++i) {
+    samples[i] = measureDistanceCm();
+    delayMicroseconds(120);
+  }
+
+  for (int i = 0; i < 2; ++i) {
+    for (int j = i + 1; j < 3; ++j) {
+      if (samples[j] < samples[i]) {
+        const float swap = samples[i];
+        samples[i] = samples[j];
+        samples[j] = swap;
+      }
+    }
+  }
+
+  return samples[1];
 }
 
 void processGpsStream() {
@@ -356,6 +400,16 @@ void applyAlertPattern() {
   digitalWrite(Pins::vibrator, outputOn ? HIGH : LOW);
 }
 
+void applySosAlertPattern() {
+  constexpr unsigned long kSosPeriodMs = 280UL;
+  constexpr unsigned long kSosOnMs = 200UL;
+  const unsigned long elapsed = millis() % kSosPeriodMs;
+  const bool outputOn = elapsed < kSosOnMs;
+
+  digitalWrite(Pins::buzzer, outputOn ? HIGH : LOW);
+  digitalWrite(Pins::vibrator, outputOn ? HIGH : LOW);
+}
+
 void updateBatteryLevel() {
   if (Pins::batteryAdc < 0) {
     batteryLevel = -1;
@@ -393,6 +447,7 @@ void publishTelemetryToApi() {
   HTTPClient http;
   http.begin(SMARTVEST_API_URL);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-SmartVest-Api-Key", SMARTVEST_IOT_API_KEY);
 
   String payload = String("{") +
                    "\"deviceId\":\"" + SMARTVEST_DEVICE_ID + "\"," +
@@ -444,7 +499,17 @@ String buildTelemetryJson() {
 }
 
 bool sendSms(const String& message) {
-  if (!sendAtCommand("AT+CMGF=1", "OK", 2000)) {
+  if (!SMARTVEST_ENABLE_SIM800 || strlen(SMARTVEST_SOS_PHONE) < 8) {
+    return false;
+  }
+
+  if (!sendAtCommand("AT", "OK", 3000)) {
+    Serial.println("SMS: modulo GSM sin respuesta AT");
+    return false;
+  }
+
+  if (!sendAtCommand("AT+CMGF=1", "OK", 3000)) {
+    Serial.println("SMS: modo texto no disponible");
     return false;
   }
 
@@ -452,19 +517,27 @@ bool sendSms(const String& message) {
     gsmSerial.read();
   }
 
+  Serial.print("SMS destino: ");
+  Serial.println(SMARTVEST_SOS_PHONE);
+
   gsmSerial.print("AT+CMGS=\"");
   gsmSerial.print(SMARTVEST_SOS_PHONE);
   gsmSerial.print("\"\r");
 
   unsigned long startMs = millis();
-  while (millis() - startMs < 5000UL) {
+  while (millis() - startMs < 15000UL) {
     if (gsmSerial.find(">")) {
       gsmSerial.print(message);
       gsmSerial.write(26);
-      return gsmSerial.find("OK");
+      if (gsmSerial.find("OK")) {
+        return true;
+      }
+      Serial.println("SMS: envio sin confirmacion OK");
+      return false;
     }
   }
 
+  Serial.println("SMS: timeout esperando prompt >");
   return false;
 }
 

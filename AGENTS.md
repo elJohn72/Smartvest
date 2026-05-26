@@ -2,6 +2,16 @@
 
 This repository contains the SmartVest web app, local PHP API endpoints, MariaDB schema, and ESP32 PlatformIO firmware.
 
+## Human Documentation (Spanish)
+
+Point users and contributors to:
+
+- `README.md` — project index and quick start
+- `docs/README.md` — full documentation index
+- `docs/PROYECTO.md`, `docs/TECNOLOGIAS.md`, `docs/ARQUITECTURA.md`, `docs/API.md`, `docs/INSTALACION.md`, `docs/FUNCIONALIDADES.md`, `docs/DESPLIEGUE.md`
+- `.specify/memory/constitution.md` — project principles for Spec Kit
+- `specs/001-web-platform-audit/` — audit spec, plan, tasks, checklist
+
 ## Scope
 
 - App frontend: Vite + React + TypeScript
@@ -44,9 +54,12 @@ The exact upload port can change. Check serial ports first with `ls /dev/cu.*`.
 
 ### Database / API Checks
 
-- Query users API: `curl "http://localhost/Smartvest/api/users.php"`
+- Query users API: `curl "http://localhost/Smartvest/api/users.php"` (must not return `password` fields)
 - Query one IoT device: `curl "http://localhost/Smartvest/api/iot.php?deviceId=VEST-001"`
 - Test login API: `curl -X POST "http://localhost/Smartvest/api/users.php" -H "Content-Type: application/json" -d '{"action":"login","username":"...","password":"..."}'`
+- IoT POST requires header: `X-SmartVest-Api-Key` (default local: `smartvest-local-dev-key`, override in `api/config.local.php`)
+- Address verify: `POST api/address.php` with `{"address":"..."}` (needs `SMARTVEST_GEMINI_API_KEY` in config.local.php)
+- Migrate plain passwords: `"/Applications/XAMPP/xamppfiles/bin/php" scripts/migrate-plain-passwords.php`
 - MariaDB via XAMPP client: `"/Applications/XAMPP/xamppfiles/bin/mysql" -h 127.0.0.1 -P 3306 -u root smartvest`
 
 ## Test / Lint Reality
@@ -79,9 +92,13 @@ If asked to run a single test, state clearly that no test runner is configured i
 - Frontend base path is `/Smartvest/` in `vite.config.ts`.
 - The frontend derives API paths relative to the served pathname.
 - The app is intentionally written without a `src/` directory; top-level files like `App.tsx` and `index.tsx` are expected.
-- `storageService.ts` talks to `api/users.php` and falls back to `localStorage` if the API is unavailable.
-- `iotService.ts` polls `api/iot.php` and keeps an in-memory device cache.
+- `storageService.ts` talks to `api/users.php` and falls back to `localStorage` if the API is unavailable; never persist `password` in localStorage.
+- `iotService.ts` polls `api/iot.php` (~2s, ~1s when SOS), tracks connection status, sends `X-SmartVest-Api-Key` on localhost POST.
+- `toastService.ts` + `components/ToastProvider.tsx` for user feedback (no `alert()` in new code).
+- `geminiService.ts` calls `api/address.php` only; do not embed Gemini API keys in Vite bundle.
 - PHP endpoints use PDO and return JSON through `json_response()` in `api/config.php`.
+- Passwords: `password_hash` / `password_verify`; `public_user_row()` strips password from API responses.
+- Optional secrets: `api/config.local.php` (from `config.local.php.example`, gitignored).
 
 ## TypeScript Conventions
 

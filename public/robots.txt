@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /Smartvest/
+
+Sitemap: /Smartvest/sitemap.xml

@@ -1,0 +1,9 @@
+<?php
+
+declare(strict_types=1);
+
+// Copia este archivo a config.local.php y ajusta los valores.
+// config.local.php está en .gitignore.
+
+const SMARTVEST_IOT_API_KEY = 'cambia-esta-clave-local';
+const SMARTVEST_GEMINI_API_KEY = '';

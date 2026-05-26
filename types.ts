@@ -30,8 +30,10 @@ export interface IotData {
   longitude: number;
   sosActive: boolean;
   lastUpdate: number;
-  batteryLevel?: number;
+  batteryLevel?: number | null;
 }
+
+export interface IotHistoryPoint extends IotData {}
 
 export enum AppScreen {
   LANDING = 'LANDING',

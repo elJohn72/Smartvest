@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 import { Button } from './Button';
 import { UserPlus, FileSpreadsheet, Smartphone, Download, Upload, Database, Server, HelpCircle, X } from 'lucide-react';
 import { exportToCSV, exportToJSON, importFromJSON } from '../services/storageService';
+import { showToast } from '../services/toastService';
 
 interface Props {
   onNewRegister: () => void;
@@ -26,7 +27,7 @@ export const Home: React.FC<Props> = ({ onNewRegister }) => {
 
       void (async () => {
         const result = await importFromJSON(content);
-        alert(result.message);
+        showToast(result.message, result.success ? 'success' : 'error');
         if (fileInputRef.current) fileInputRef.current.value = '';
       })();
     };
@@ -35,13 +36,18 @@ export const Home: React.FC<Props> = ({ onNewRegister }) => {
 
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 max-w-4xl mx-auto w-full">
-      
+
       {/* Hosting Help Modal */}
       {showHostingHelp && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
-            <button onClick={() => setShowHostingHelp(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-              <X size={24} />
+            <button
+              type="button"
+              onClick={() => setShowHostingHelp(false)}
+              aria-label="Cerrar guía de hosting"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X size={24} aria-hidden="true" />
             </button>
             
             <div className="flex items-center gap-3 mb-4 text-blue-700">

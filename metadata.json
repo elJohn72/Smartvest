@@ -1,6 +1,6 @@
 {
-  "name": "SmartVest Registro",
-  "description": "Registro de usuarios para SmartVest con generación de código QR de emergencia y validación de direcciones asistida por IA.",
+  "name": "SmartVest — Sistema de Emergencia",
+  "description": "Plataforma web para perfiles médicos de emergencia, códigos QR y monitoreo IoT de chaleco inteligente (ESP32). Stack: React, PHP, MariaDB.",
   "requestFramePermissions": [
     "geolocation"
   ]

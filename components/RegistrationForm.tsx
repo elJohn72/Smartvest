@@ -4,6 +4,8 @@ import { Input } from './Input';
 import { Button } from './Button';
 import { UserData } from '../types';
 import { verifyAddressWithGemini } from '../services/geminiService';
+import { showToast } from '../services/toastService';
+import { validateRegistrationForm } from '../utils/validateRegistration';
 import { MapPin, CheckCircle, Loader2, Camera, Upload, Cpu, AlertCircle } from 'lucide-react';
 
 interface Props {
@@ -16,6 +18,8 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
   const [addressVerified, setAddressVerified] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [addressNotice, setAddressNotice] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -61,19 +65,31 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
     if (!formData.address) return;
     
     setLoadingAddress(true);
+    setAddressNotice(null);
     const verified = await verifyAddressWithGemini(formData.address);
     setLoadingAddress(false);
     
     if (verified) {
         setFormData(prev => ({ ...prev, address: verified }));
         setAddressVerified(true);
+        setAddressNotice('Dirección verificada y actualizada.');
+        showToast('Dirección verificada y actualizada.', 'success');
     } else {
-        alert("No pudimos verificar la dirección exacta con Google Maps, pero puedes continuar con la que ingresaste.");
+        setAddressNotice('No pudimos verificar la dirección con el servidor. Puedes continuar con la que ingresaste.');
+        showToast('No se pudo verificar la dirección. Puedes continuar igual.', 'info');
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    const validationError = validateRegistrationForm(formData);
+    if (validationError) {
+      setFormError(validationError);
+      showToast(validationError, 'error');
+      return;
+    }
     
     const newUser: UserData = {
       id: crypto.randomUUID(),
@@ -102,6 +118,12 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200">
       <h2 className="text-3xl font-bold text-smart-dark mb-8 border-b pb-4">Nuevo Registro</h2>
+
+      {formError && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert" aria-live="polite">
+          {formError}
+        </div>
+      )}
       
       <div className="mb-8 flex flex-col items-center justify-center">
         <div className="relative w-32 h-32 mb-4 group">
@@ -162,7 +184,7 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
                 name="bloodType" 
                 value={formData.bloodType} 
                 onChange={handleChange}
-                className="w-full p-4 text-lg bg-white border-2 border-smart-gray rounded-lg text-smart-dark focus:border-smart-primary focus:ring-2 focus:ring-blue-200 outline-none"
+                className="w-full p-4 text-lg bg-white border-2 border-smart-gray rounded-lg text-smart-dark focus:border-smart-primary focus:ring-2 focus:ring-blue-200 focus-visible:outline-none"
             >
                 {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map(type => (
                     <option key={type} value={type}>{type}</option>
@@ -196,6 +218,12 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
         }
       />
 
+      {addressNotice && (
+        <p className="-mt-4 mb-6 text-sm text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2" role="status" aria-live="polite">
+          {addressNotice}
+        </p>
+      )}
+
       <div className="bg-blue-50 p-4 rounded-lg mb-6 border-l-4 border-smart-primary">
         <h3 className="font-bold text-lg text-smart-primary mb-4">Datos de Emergencia</h3>
         
@@ -203,6 +231,8 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
           label="Teléfono de Emergencia" 
           name="emergencyPhone" 
           type="tel"
+          inputMode="tel"
+          autoComplete="tel"
           value={formData.emergencyPhone} 
           onChange={handleChange} 
           placeholder="Ej. 0991234567"
@@ -256,6 +286,9 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
             value={formData.username} 
             onChange={handleChange} 
             placeholder="Usuario para el sistema"
+            autoComplete="username"
+            spellCheck={false}
+            required
           />
           <Input 
             label="Contraseña" 
@@ -263,7 +296,10 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
             type="password"
             value={formData.password} 
             onChange={handleChange} 
-            placeholder="********"
+            placeholder="Mínimo 6 caracteres"
+            autoComplete="new-password"
+            spellCheck={false}
+            required
           />
         </div>
       </div>

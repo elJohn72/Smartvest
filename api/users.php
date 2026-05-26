@@ -17,12 +17,12 @@ if ($method === 'GET') {
 
         json_response([
             'success' => true,
-            'user' => $user ? normalize_user_row($user) : null,
+            'user' => $user ? public_user_row($user) : null,
         ]);
     }
 
     $statement = $pdo->query('SELECT * FROM users ORDER BY created_at DESC');
-    $users = array_map('normalize_user_row', $statement->fetchAll());
+    $users = array_map('public_user_row', $statement->fetchAll());
 
     json_response([
         'success' => true,
@@ -49,13 +49,19 @@ if ($action === 'login') {
     $statement->execute(['username' => $username]);
     $user = $statement->fetch();
 
-    if (!$user || (string) ($user['password'] ?? '') !== $password) {
+    if (!$user || !verify_password((string) ($user['password'] ?? ''), $password)) {
         json_response(['success' => false, 'message' => 'Usuario o contraseña incorrectos.'], 401);
+    }
+
+    if (!str_starts_with((string) $user['password'], '$2y$') && !str_starts_with((string) $user['password'], '$argon2')) {
+        $hashed = hash_password($password);
+        $update = $pdo->prepare('UPDATE users SET password = :password WHERE id = :id');
+        $update->execute(['password' => $hashed, 'id' => $user['id']]);
     }
 
     json_response([
         'success' => true,
-        'user' => normalize_user_row($user),
+        'user' => public_user_row($user),
     ]);
 }
 
@@ -87,6 +93,25 @@ json_response(['success' => true]);
 
 function upsert_user(PDO $pdo, array $user): void
 {
+    $userId = (string) ($user['id'] ?? '');
+    $existingHash = null;
+
+    if ($userId !== '') {
+        $lookup = $pdo->prepare('SELECT password FROM users WHERE id = :id LIMIT 1');
+        $lookup->execute(['id' => $userId]);
+        $existing = $lookup->fetch();
+        $existingHash = $existing['password'] ?? null;
+    }
+
+    $passwordToStore = prepare_password_for_storage(
+        array_key_exists('password', $user) ? (string) ($user['password'] ?? '') : null,
+        $existingHash !== null ? (string) $existingHash : null
+    );
+
+    if ($passwordToStore === null && $existingHash !== null) {
+        $passwordToStore = $existingHash;
+    }
+
     $statement = $pdo->prepare(
         'INSERT INTO users (
             id, full_name, national_id, age, blood_type, address, emergency_phone,
@@ -112,7 +137,7 @@ function upsert_user(PDO $pdo, array $user): void
     );
 
     $statement->execute([
-        'id' => (string) ($user['id'] ?? ''),
+        'id' => $userId,
         'full_name' => (string) ($user['fullName'] ?? ''),
         'national_id' => (string) ($user['nationalId'] ?? ''),
         'age' => (int) ($user['age'] ?? 0),
@@ -124,7 +149,7 @@ function upsert_user(PDO $pdo, array $user): void
         'created_at' => (string) ($user['createdAt'] ?? date(DATE_ATOM)),
         'photo' => $user['photo'] ?? null,
         'username' => $user['username'] ?? null,
-        'password' => $user['password'] ?? null,
+        'password' => $passwordToStore,
         'device_id' => $user['deviceId'] ?? null,
     ]);
 }

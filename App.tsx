@@ -8,7 +8,15 @@ import { UserProfile } from './components/UserProfile';
 import { Login } from './components/Login';
 import { Button } from './components/Button';
 import { AppScreen, UserData } from './types';
-import { saveUser, getUserById, loginUser } from './services/storageService';
+import {
+  saveUser,
+  getUserById,
+  loginUser,
+  saveAppSession,
+  getAppSession,
+  clearAppSession,
+} from './services/storageService';
+import { showToast } from './services/toastService';
 import './services/iotService'; 
 
 const createImportedUser = (payload: Partial<UserData>): UserData | null => {
@@ -50,51 +58,74 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.LANDING);
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
 
-  // Check for URL parameters on mount (Handling both Local ID and Portable Data Links)
+  const openUserScreen = (user: UserData, screen: AppScreen) => {
+    setCurrentUser(user);
+    setCurrentScreen(screen);
+    saveAppSession(user.id, screen);
+  };
+
   useEffect(() => {
-    const hydrateFromUrl = async () => {
-    if (typeof window !== 'undefined') {
-        const params = new URLSearchParams(window.location.search);
-        
-        // OPTION A: Monitoring Link (Contains only the public profile needed to identify the vest)
-        const encodedData = params.get('data');
-        if (encodedData) {
-            try {
-                // Decode safe Base64 (Reverse the encoding from QRCodeView)
-                const jsonString = decodeURIComponent(escape(atob(encodedData)));
-                const importedUser = createImportedUser(JSON.parse(jsonString));
-                
-                if (importedUser && importedUser.id) {
-                    // Save the imported public profile so the monitor can reopen it locally later.
-                    await saveUser(importedUser);
-                    setCurrentUser(importedUser);
-                    setCurrentScreen(AppScreen.PROFILE);
-                    return; // Stop processing
-                }
-            } catch (e) {
-                console.error("Error decoding portable link:", e);
-                setProfileError("El enlace de datos parece estar dañado o incompleto.");
-                setCurrentScreen(AppScreen.PROFILE);
-            }
-        }
+    const bootstrapApp = async () => {
+      if (typeof window === 'undefined') {
+        setIsBootstrapping(false);
+        return;
+      }
 
-        // OPTION B: Local ID Link (Only works if data is already on device)
-        const uid = params.get('uid');
-        if (uid) {
-          const foundUser = await getUserById(uid);
-          if (foundUser) {
-            setCurrentUser(foundUser);
-            setCurrentScreen(AppScreen.PROFILE);
-          } else {
-            setProfileError("Usuario no encontrado en este dispositivo. Si escaneaste un código antiguo, asegúrate de tener los datos sincronizados.");
-            setCurrentScreen(AppScreen.PROFILE);
+      const params = new URLSearchParams(window.location.search);
+
+      const encodedData = params.get('data');
+      if (encodedData) {
+        try {
+          const jsonString = decodeURIComponent(escape(atob(encodedData)));
+          const importedUser = createImportedUser(JSON.parse(jsonString));
+
+          if (importedUser?.id) {
+            await saveUser(importedUser);
+            openUserScreen(importedUser, AppScreen.PROFILE);
+            setIsBootstrapping(false);
+            return;
           }
+        } catch (e) {
+          console.error('Error decoding portable link:', e);
+          setProfileError('El enlace de datos parece estar dañado o incompleto.');
+          setCurrentScreen(AppScreen.PROFILE);
+          setIsBootstrapping(false);
+          return;
         }
-    }
+      }
+
+      const uid = params.get('uid');
+      if (uid) {
+        const foundUser = await getUserById(uid);
+        if (foundUser) {
+          openUserScreen(foundUser, AppScreen.PROFILE);
+        } else {
+          setProfileError(
+            'Usuario no encontrado en este dispositivo. Si escaneaste un código antiguo, asegúrate de tener los datos sincronizados.',
+          );
+          setCurrentScreen(AppScreen.PROFILE);
+        }
+        setIsBootstrapping(false);
+        return;
+      }
+
+      const session = getAppSession();
+      if (session) {
+        const user = await getUserById(session.userId);
+        if (user) {
+          setCurrentUser(user);
+          setCurrentScreen(session.screen);
+        } else {
+          clearAppSession();
+        }
+      }
+
+      setIsBootstrapping(false);
     };
 
-    void hydrateFromUrl();
+    void bootstrapApp();
   }, []);
 
   const handleNewRegister = () => {
@@ -108,17 +139,16 @@ const App: React.FC = () => {
 
   const handleRegisterSubmit = async (user: UserData) => {
     await saveUser(user);
-    setCurrentUser(user);
-    setCurrentScreen(AppScreen.QR_VIEW);
+    openUserScreen(user, AppScreen.QR_VIEW);
+    showToast('Registro guardado. Genera tu código QR de emergencia.', 'success');
   };
 
   const handleLoginSuccess = async (id: string) => {
     const user = await getUserById(id);
     if (user) {
-        setCurrentUser(user);
-        setCurrentScreen(AppScreen.PROFILE);
+      openUserScreen(user, AppScreen.PROFILE);
     } else {
-        throw new Error('Usuario no encontrado con ese ID.');
+      throw new Error('Usuario no encontrado con ese ID.');
     }
   };
 
@@ -129,11 +159,12 @@ const App: React.FC = () => {
       throw new Error('No se encontró el usuario.');
     }
 
-    setCurrentUser(user);
-    setCurrentScreen(AppScreen.PROFILE);
+    openUserScreen(user, AppScreen.PROFILE);
+    showToast(`Bienvenido, ${user.fullName}.`, 'success');
   };
 
   const handleBackHome = () => {
+    clearAppSession();
     setCurrentUser(null);
     setCurrentScreen(AppScreen.LANDING);
     setProfileError(null);
@@ -150,8 +181,12 @@ const App: React.FC = () => {
   return (
     <>
       <Header onLogoClick={handleBackHome} />
-      <main className="flex-grow bg-smart-light flex flex-col">
-        {currentScreen === AppScreen.LANDING && (
+      <main id="main-content" className="flex-grow bg-smart-light flex flex-col">
+        {isBootstrapping ? (
+          <div className="flex flex-grow items-center justify-center py-24 text-gray-500">
+            Cargando…
+          </div>
+        ) : currentScreen === AppScreen.LANDING && (
           <LandingPage 
             onLogin={handleLoginClick} 
             onRegister={handleNewRegister} 
@@ -179,7 +214,13 @@ const App: React.FC = () => {
            <div className="container mx-auto px-4 py-8">
                 <QRCodeView 
                     user={currentUser} 
-                    onBackHome={handleBackHome} 
+                    onBackHome={handleBackHome}
+                    onViewProfile={() => {
+                      if (currentUser) {
+                        openUserScreen(currentUser, AppScreen.PROFILE);
+                      }
+                      clearUrlParams();
+                    }}
                 />
           </div>
         )}

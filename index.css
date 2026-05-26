@@ -18,3 +18,30 @@ body {
     opacity: 1;
   }
 }
+
+@media print {
+  body {
+    background: white !important;
+  }
+
+  header,
+  footer,
+  .print\\:hidden {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce,
+  .animate-spin,
+  .animate-gradient {
+    animation: none !important;
+  }
+
+  * {
+    scroll-behavior: auto !important;
+  }
+}

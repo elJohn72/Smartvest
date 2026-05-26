@@ -112,14 +112,20 @@ export const Login: React.FC<Props> = ({ onLoginSuccess, onCredentialLogin, onCa
                 )}
 
                 {error && (
-                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <div
+                        className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                        role="alert"
+                        aria-live="polite"
+                    >
                         {error}
                     </div>
                 )}
 
                 <div className="space-y-3 mt-6">
                     <Button fullWidth type="submit" icon={<ArrowRight size={20} />} disabled={isSubmitting}>
-                        {authMode === 'user' ? 'Ingresar' : 'Buscar Perfil'}
+                        {isSubmitting
+                          ? (authMode === 'user' ? 'Ingresando…' : 'Buscando…')
+                          : (authMode === 'user' ? 'Ingresar' : 'Buscar Perfil')}
                     </Button>
                     <Button fullWidth type="button" variant="secondary" onClick={onCancel}>
                         Volver

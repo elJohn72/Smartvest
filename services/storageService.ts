@@ -1,7 +1,46 @@
 
-import { UserData } from '../types';
+import { AppScreen, UserData } from '../types';
+import { showToast } from './toastService';
 
 const STORAGE_KEY = 'smartvest_users';
+const SESSION_KEY = 'smartvest_session';
+
+export interface StoredAppSession {
+  userId: string;
+  screen: AppScreen;
+}
+
+const isAppScreen = (value: string): value is AppScreen =>
+  (Object.values(AppScreen) as string[]).includes(value);
+
+export const saveAppSession = (userId: string, screen: AppScreen): void => {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId, screen }));
+};
+
+export const getAppSession = (): StoredAppSession | null => {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as { userId?: string; screen?: string };
+    if (!parsed.userId) {
+      return null;
+    }
+
+    return {
+      userId: parsed.userId,
+      screen: parsed.screen && isAppScreen(parsed.screen) ? parsed.screen : AppScreen.PROFILE,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const clearAppSession = (): void => {
+  sessionStorage.removeItem(SESSION_KEY);
+};
 
 const getLocalUsers = (): UserData[] => {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -12,14 +51,20 @@ const saveLocalUsers = (users: UserData[]): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
 };
 
+const withoutPassword = (user: UserData): UserData => {
+  const { password: _password, ...safeUser } = user;
+  return safeUser;
+};
+
 const upsertLocalUser = (user: UserData): void => {
   const users = getLocalUsers();
-  const index = users.findIndex(u => u.id === user.id);
+  const safeUser = withoutPassword(user);
+  const index = users.findIndex(u => u.id === safeUser.id);
 
   if (index >= 0) {
-    users[index] = user;
+    users[index] = safeUser;
   } else {
-    users.push(user);
+    users.push(safeUser);
   }
 
   saveLocalUsers(users);
@@ -72,8 +117,9 @@ export const getUsers = async (): Promise<UserData[]> => {
 
     const payload = await response.json();
     if (Array.isArray(payload.users)) {
-      saveLocalUsers(payload.users);
-      return payload.users;
+      const users = payload.users.map((user: UserData) => withoutPassword(user));
+      saveLocalUsers(users);
+      return users;
     }
   } catch (_error) {
     return getLocalUsers();
@@ -128,7 +174,7 @@ export const loginUser = async (username: string, password: string): Promise<Use
 export const exportToCSV = async (): Promise<void> => {
   const users = await getUsers();
   if (users.length === 0) {
-    alert("No hay registros para exportar.");
+    showToast('No hay registros para exportar.', 'error');
     return;
   }
 
@@ -163,13 +209,14 @@ export const exportToCSV = async (): Promise<void> => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  showToast('CSV exportado correctamente.', 'success');
 };
 
 // Función para guardar respaldo completo (JSON) que se puede restaurar
 export const exportToJSON = async (): Promise<void> => {
   const users = await getUsers();
   if (users.length === 0) {
-    alert("No hay datos para realizar una copia de seguridad.");
+    showToast('No hay datos para realizar una copia de seguridad.', 'error');
     return;
   }
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(users, null, 2));
@@ -179,6 +226,7 @@ export const exportToJSON = async (): Promise<void> => {
   document.body.appendChild(link);
   link.click();
   link.remove();
+  showToast('Respaldo JSON descargado.', 'success');
 };
 
 // Función para restaurar datos desde un archivo JSON

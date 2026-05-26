@@ -1,0 +1,25 @@
+{
+  "short_name": "SmartVest",
+  "name": "SmartVest — Sistema de Emergencia",
+  "description": "Perfil médico, monitoreo del chaleco y alertas SOS.",
+  "start_url": "/Smartvest/",
+  "scope": "/Smartvest/",
+  "display": "standalone",
+  "theme_color": "#1e40af",
+  "background_color": "#f8fafc",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/Smartvest/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Smartvest/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

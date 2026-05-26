@@ -10,9 +10,11 @@ export const Header: React.FC<Props> = ({ onLogoClick }) => {
   return (
     <header className="bg-smart-dark text-white p-4 shadow-md sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
       <div className="max-w-6xl mx-auto flex items-center justify-between">
-        <div 
-            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+        <button
+            type="button"
             onClick={onLogoClick}
+            aria-label="Volver al inicio de SmartVest"
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity text-left"
         >
           {/* Custom Logo SVG based on provided design */}
           <div className="bg-white p-1.5 rounded-xl h-12 w-12 flex items-center justify-center shadow-lg">
@@ -29,7 +31,7 @@ export const Header: React.FC<Props> = ({ onLogoClick }) => {
             <h1 className="text-xl font-bold tracking-wide font-sans">SmartVest</h1>
             <p className="text-[10px] text-gray-300 uppercase tracking-widest">Sistema de Emergencia</p>
           </div>
-        </div>
+        </button>
         
         {/* Navigation removed as requested, content is now on Landing Page */}
       </div>

@@ -1,48 +1,89 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# SmartVest — Sistema de emergencia inteligente
 
-# SmartVest
+**SmartVest** es una plataforma para registrar perfiles médicos de emergencia, generar códigos QR, y monitorear en tiempo (casi) real un **chaleco inteligente** con sensores IoT (distancia, GPS, botón SOS, batería). Está pensado para apoyar a personas con **discapacidad visual** y a sus familiares o cuidadores.
 
-Aplicación React/Vite para registro de usuarios y monitoreo IoT con QR.
+| Enlace | Contenido |
+|--------|-----------|
+| [¿Qué es SmartVest?](docs/PROYECTO.md) | Misión, usuarios, flujo general |
+| [Tecnologías](docs/TECNOLOGIAS.md) | Stack completo explicado en lenguaje claro |
+| [Arquitectura](docs/ARQUITECTURA.md) | Cómo se conectan web, API, BD y ESP32 |
+| [API y base de datos](docs/API.md) | Endpoints, tablas, seguridad |
+| [Instalación local (XAMPP)](docs/INSTALACION.md) | Paso a paso en tu Mac/PC |
+| [Funcionalidades y mejoras](docs/FUNCIONALIDADES.md) | Todo lo que hace la app hoy |
+| [Firmware ESP32](firmware/esp32/platformio-smartvest/README.md) | Chaleco, pines, telemetría |
+| [Configurar ESP32 en Mac](docs/CONFIGURACION-ESP32.md) | WiFi, upload, pruebas |
+| [Despliegue en Internet](docs/DESPLIEGUE.md) | Vercel, GitHub Pages, XAMPP |
+| [Comparativa de mercado](docs/COMPARATIVA-MERCADO.md) | Productos similares y posicionamiento |
+| [Roadmap de mejoras](docs/ROADMAP-MEJORAS.md) | Hecho / pendiente por fases |
+| [Alertas accesibles](docs/ALERTAS-ACCESIBLES.md) | Buzzer, vibrador, SOS |
+| [Servidor fijo en LAN](docs/SERVIDOR-FIJO-LAN.md) | IP para el ESP32 (no localhost) |
+| [SMS de emergencia](docs/SMS-SOS-EMERGENCIA.md) | SIM800L → 0993212257 |
+| [Guía de exposición](docs/GUIA-EXPOSICION.md) | Presentar el proyecto en ferias o defensa |
+| [Guía para agentes IA](AGENTS.md) | Comandos y convenciones del repo |
 
-## Desarrollo con Node
+---
 
-**Requisitos:** Node.js
+## Inicio rápido (desarrollo local)
 
-1. Instala dependencias con `npm install`.
-2. Si vas a usar Gemini, configura `API_KEY` en tu entorno de Vite.
-3. Ejecuta `npm run dev`.
+**Requisitos:** Node.js 18+, XAMPP (Apache + MariaDB) o equivalente.
 
-## Ejecutar en XAMPP + MariaDB
+```bash
+# 1. Dependencias del frontend
+npm install
 
-**Requisitos:** XAMPP con Apache y MariaDB activos.
+# 2. Base de datos (en phpMyAdmin o consola)
+#    Ejecutar database.sql → crea BD smartvest
 
-1. Copia esta carpeta a `htdocs/Smartvest`.
-2. Entra a `http://localhost/phpmyadmin` y ejecuta el archivo `database.sql`.
-3. Verifica las credenciales de `api/config.php`.
-   Por defecto usa:
-   - host: `127.0.0.1`
-   - puerto: `3306`
-   - base: `smartvest`
-   - usuario: `root`
-   - contraseña: vacía
-4. En la carpeta del proyecto ejecuta `npm install` y luego `npm run build`.
-5. Abre `http://localhost/Smartvest/`.
+# 3. Build y publicar en XAMPP
+npm run build
+./scripts/deploy-xampp.sh
 
-## APIs locales incluidas
+# 4. Abrir en el navegador
+open http://localhost/Smartvest/
+```
 
-- `api/users.php`: guarda y consulta usuarios en MariaDB.
-- `api/iot.php`: guarda y consulta la última ubicación/estado por `deviceId`.
+**Configuración opcional:** copia `api/config.local.php.example` → `api/config.local.php` para claves de Gemini (direcciones) e IoT.
 
-## Flujo de monitoreo local
+**IP para el chaleco:** `./scripts/print-lan-ip.sh` — usa esa URL en `smartvest_config.h`, no `localhost`.
 
-1. Registras a la persona.
-2. Se genera un QR con su perfil público de monitoreo y `deviceId`.
-3. Al escanear el QR desde otro equipo, se abre el perfil.
-4. El frontend consulta `api/iot.php` para ver la última ubicación del chaleco.
+---
 
-## Simulación IoT
+## Estructura del repositorio
 
-Desde el perfil puedes usar los botones de simulación para mover el GPS o activar SOS.
-También puedes enviar actualizaciones reales al endpoint `api/iot.php` desde tu ESP32 o backend.
+```text
+Smartvest/
+├── App.tsx, index.tsx, types.ts   # App React (sin carpeta src/)
+├── components/                    # Pantallas y UI
+├── services/                      # API cliente, IoT, toasts, almacenamiento
+├── utils/                         # Validación, GPS, obstáculos, etc.
+├── api/                           # Backend PHP (users, iot, address)
+├── database.sql                   # Esquema MariaDB
+├── firmware/esp32/                # Código del chaleco (PlatformIO)
+├── scripts/                       # deploy-xampp.sh, migración contraseñas
+├── specs/                         # Auditoría y plan Spec Kit
+└── docs/                          # Documentación detallada (este índice)
+```
+
+---
+
+## APIs principales
+
+| Endpoint | Uso |
+|----------|-----|
+| `GET/POST api/users.php` | Registro, login, listado de usuarios |
+| `GET/POST api/iot.php` | Telemetría del chaleco por `deviceId` |
+| `POST api/address.php` | Verificación de dirección (Gemini en servidor) |
+
+---
+
+## Comunicación IoT (resumen)
+
+El chaleco envía datos por **HTTP POST** cada ~5 s. La web consulta el último estado por **HTTP GET** cada ~2 s (1 s si hay SOS). No se usa MQTT en la versión actual; ver [Arquitectura](docs/ARQUITECTURA.md).
+
+---
+
+## Licencia y contacto
+
+Proyecto académico / producto en evolución. Contacto de referencia en la landing: **contacto@smartvest.app**.
+
+**Documentación generada para la versión actual del código** (mayo 2026). Si cambias API o esquema, actualiza `database.sql`, `docs/API.md` y este README.
