@@ -22,11 +22,34 @@ body {
 @media print {
   body {
     background: white !important;
+    margin: 0;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #smartvest-print-sheet,
+  #smartvest-print-sheet * {
+    visibility: visible;
+  }
+
+  #smartvest-print-sheet {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 1.5cm;
+    color: #000 !important;
+    font-size: 12pt;
+    line-height: 1.45;
   }
 
   header,
   footer,
-  .print\\:hidden {
+  #root,
+  .print-screen {
     display: none !important;
   }
 }

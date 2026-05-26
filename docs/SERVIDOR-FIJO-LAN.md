@@ -46,3 +46,26 @@ Debe devolver JSON con `success: true`.
 ## Firewall
 
 En macOS, permite conexiones entrantes a Apache si el chaleco no conecta desde la LAN.
+
+---
+
+## Acceso desde el celular (túnel temporal)
+
+Si el teléfono **no está en la misma WiFi** o quieres probar con datos móviles:
+
+1. XAMPP encendido y app desplegada (`npm run build && ./scripts/deploy-xampp.sh`).
+2. En la Mac:
+   ```bash
+   ./scripts/tunnel-phone.sh
+   ```
+3. Copia la URL `https://....trycloudflare.com` y en el celular abre:
+   ```text
+   https://....trycloudflare.com/Smartvest/
+   ```
+
+**Importante:**
+
+- El túnel debe seguir **corriendo** en la Mac (no la apagues ni cierres la terminal).
+- La URL **cambia** cada vez que reinicias `cloudflared`.
+- El **ESP32** sigue usando la IP local (`192.168.x.x`), no la URL del túnel.
+- La simulación IoT en el perfil solo funciona en `localhost`; desde el celular verás datos reales del chaleco vía GET.

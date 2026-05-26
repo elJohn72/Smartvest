@@ -55,7 +55,7 @@ Acciones:
 - **Notificaciones SOS** del navegador + sonido de alerta para el cuidador.
 - **Guía de alertas hápticas** (umbrales buzzer/vibrador).
 - **PWA** (`manifest.json`, `sw.js`, iconos locales).
-- **SMS SOS (SIM800L)** al **0993212257** al pulsar el botón físico — [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md).
+- **SMS SOS (SIM800L)** al **0963930791** (cuidador) al pulsar el botón físico — [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md).
 
 ### Emergencia SOS (tres canales)
 
@@ -66,7 +66,9 @@ Acciones:
 | GSM | SMS con `deviceId`, distancia y mapa (si GPS fix) |
 - Tarjetas: contacto, observaciones médicas, dirección.
 - **Pantalla SOS** a pantalla completa si `sosActive` es true.
-- **Imprimir ficha** de emergencia (vista impresión limpia).
+- **Imprimir ficha** de emergencia (solo datos médicos en papel; nombre, sangre, contacto, observaciones).
+- **Configuración** desde el perfil: editar persona, QR, impresión, notificaciones.
+- **Editar perfil** de la persona usuaria (mismos campos que registro; contraseña opcional).
 - Panel **Simulación (demo)** plegable: mover GPS, activar/apagar SOS.
 - Modal de ayuda para conexión del hardware.
 

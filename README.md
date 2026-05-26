@@ -17,8 +17,12 @@
 | [Roadmap de mejoras](docs/ROADMAP-MEJORAS.md) | Hecho / pendiente por fases |
 | [Alertas accesibles](docs/ALERTAS-ACCESIBLES.md) | Buzzer, vibrador, SOS |
 | [Servidor fijo en LAN](docs/SERVIDOR-FIJO-LAN.md) | IP para el ESP32 (no localhost) |
-| [SMS de emergencia](docs/SMS-SOS-EMERGENCIA.md) | SIM800L → 0993212257 |
+| [SMS de emergencia](docs/SMS-SOS-EMERGENCIA.md) | SIM800L → 0963930791 (cuidador) |
 | [Guía de exposición](docs/GUIA-EXPOSICION.md) | Presentar el proyecto en ferias o defensa |
+| [Roadmap visión IA](docs/ROADMAP-VISION-IA.md) | Complemento cámara + ultrasonido (siguiente fase) |
+| [Hardware compacto v2](docs/HARDWARE-COMPACTO-FUTURO.md) | Investigación GSM/GPS/cámara en una placa |
+| [Plan SmartVest v2](docs/SMARTVEST-V2-PLAN.md) | Próxima generación: hardware, conectividad, checklist (documentado) |
+| [SmartVest v2 Ecuador](docs/SMARTVEST-V2-ECUADOR.md) | Precios, Claro/Movistar/CNT, WiFi + datos móviles + SMS |
 | [Guía para agentes IA](AGENTS.md) | Comandos y convenciones del repo |
 
 ---

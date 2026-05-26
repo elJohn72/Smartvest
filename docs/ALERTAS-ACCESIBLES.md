@@ -22,7 +22,7 @@ Lectura estabilizada con **mediana de 3 muestras** en firmware.
 - **Pulsado (LOW):** patrón de alarma continuo (buzzer + vibrador) hasta soltar.
 - **Web:** pantalla roja SOS en el perfil del cuidador.
 - **HTTP:** envío cada ~2 s mientras SOS está activo (antes ~5 s).
-- **SMS:** con SIM800 activo, envía al **0993212257** (`+593993212257`) — ver [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md).
+- **SMS:** con SIM800 activo, envía al **0963930791** (`+593963930791`, cuidador) — ver [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md).
 
 ---
 

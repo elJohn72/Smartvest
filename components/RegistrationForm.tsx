@@ -1,19 +1,37 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from './Input';
 import { Button } from './Button';
 import { UserData } from '../types';
 import { verifyAddressWithGemini } from '../services/geminiService';
 import { showToast } from '../services/toastService';
-import { validateRegistrationForm } from '../utils/validateRegistration';
+import { validateRegistrationForm, validateProfileEditForm } from '../utils/validateRegistration';
 import { MapPin, CheckCircle, Loader2, Camera, Upload, Cpu, AlertCircle } from 'lucide-react';
 
 interface Props {
   onSubmit: (data: UserData) => void;
   onCancel: () => void;
+  initialUser?: UserData;
+  mode?: 'create' | 'edit';
 }
 
-export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
+const emptyForm = () => ({
+  fullName: '',
+  nationalId: '',
+  age: '',
+  bloodType: 'O+',
+  address: '',
+  emergencyPhone: '',
+  contactName: '',
+  contactRelation: '',
+  observations: '',
+  username: '',
+  password: '',
+  deviceId: '',
+});
+
+export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel, initialUser, mode = 'create' }) => {
+  const isEdit = mode === 'edit' && !!initialUser;
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [addressVerified, setAddressVerified] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -21,20 +39,30 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
   const [addressNotice, setAddressNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   
-  const [formData, setFormData] = useState({
-    fullName: '',
-    nationalId: '',
-    age: '',
-    bloodType: 'O+',
-    address: '',
-    emergencyPhone: '',
-    contactName: '',
-    contactRelation: '',
-    observations: '',
-    username: '',
-    password: '',
-    deviceId: ''
-  });
+  const [formData, setFormData] = useState(emptyForm);
+
+  useEffect(() => {
+    if (!initialUser) {
+      return;
+    }
+
+    setFormData({
+      fullName: initialUser.fullName,
+      nationalId: initialUser.nationalId,
+      age: String(initialUser.age),
+      bloodType: initialUser.bloodType,
+      address: initialUser.address,
+      emergencyPhone: initialUser.emergencyPhone,
+      contactName: initialUser.emergencyContact.name,
+      contactRelation: initialUser.emergencyContact.relationship,
+      observations: initialUser.medicalObservations === 'Ninguna' ? '' : initialUser.medicalObservations,
+      username: initialUser.username || '',
+      password: '',
+      deviceId: initialUser.deviceId || '',
+    });
+    setPhotoPreview(initialUser.photo || null);
+    setAddressVerified(true);
+  }, [initialUser]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -84,40 +112,47 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
     e.preventDefault();
     setFormError(null);
 
-    const validationError = validateRegistrationForm(formData);
+    const validationError = isEdit
+      ? validateProfileEditForm(formData)
+      : validateRegistrationForm(formData);
     if (validationError) {
       setFormError(validationError);
       showToast(validationError, 'error');
       return;
     }
-    
-    const newUser: UserData = {
-      id: crypto.randomUUID(),
-      fullName: formData.fullName,
-      nationalId: formData.nationalId,
-      age: parseInt(formData.age),
+
+    const userPayload: UserData = {
+      id: isEdit ? initialUser!.id : crypto.randomUUID(),
+      fullName: formData.fullName.trim(),
+      nationalId: formData.nationalId.trim(),
+      age: parseInt(formData.age, 10),
       bloodType: formData.bloodType,
-      address: formData.address,
-      emergencyPhone: formData.emergencyPhone,
+      address: formData.address.trim(),
+      emergencyPhone: formData.emergencyPhone.trim(),
       emergencyContact: {
-        name: formData.contactName,
-        relationship: formData.contactRelation,
-        phone: formData.emergencyPhone 
+        name: formData.contactName.trim(),
+        relationship: formData.contactRelation.trim(),
+        phone: formData.emergencyPhone.trim(),
       },
-      medicalObservations: formData.observations || 'Ninguna',
-      createdAt: new Date().toISOString(),
+      medicalObservations: formData.observations.trim() || 'Ninguna',
+      createdAt: isEdit ? initialUser!.createdAt : new Date().toISOString(),
       photo: photoPreview || undefined,
-      username: formData.username,
-      password: formData.password,
-      deviceId: formData.deviceId || `VEST-${Math.floor(Math.random()*1000)}`
+      username: formData.username.trim(),
+      deviceId: formData.deviceId.trim() || (isEdit ? initialUser!.deviceId : `VEST-${Math.floor(Math.random() * 1000)}`),
     };
 
-    onSubmit(newUser);
+    if (formData.password.trim()) {
+      userPayload.password = formData.password;
+    }
+
+    onSubmit(userPayload);
   };
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-      <h2 className="text-3xl font-bold text-smart-dark mb-8 border-b pb-4">Nuevo Registro</h2>
+      <h2 className="text-3xl font-bold text-smart-dark mb-8 border-b pb-4">
+        {isEdit ? 'Editar perfil de la persona' : 'Nuevo Registro'}
+      </h2>
 
       {formError && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert" aria-live="polite">
@@ -291,15 +326,15 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
             required
           />
           <Input 
-            label="Contraseña" 
+            label={isEdit ? 'Nueva contraseña (opcional)' : 'Contraseña'} 
             name="password" 
             type="password"
             value={formData.password} 
             onChange={handleChange} 
-            placeholder="Mínimo 6 caracteres"
+            placeholder={isEdit ? 'Dejar vacío para no cambiar' : 'Mínimo 6 caracteres'}
             autoComplete="new-password"
             spellCheck={false}
-            required
+            required={!isEdit}
           />
         </div>
       </div>
@@ -309,7 +344,7 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel }) => {
             Cancelar
         </Button>
         <Button type="submit" variant="primary" fullWidth>
-            Generar Perfil y QR
+            {isEdit ? 'Guardar cambios' : 'Generar Perfil y QR'}
         </Button>
       </div>
     </form>

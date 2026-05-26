@@ -1,8 +1,15 @@
-# Roadmap de mejoras SmartVest
+# Roadmap de mejoras SmartVest (fase incremental)
 
-Estado de la hoja de ruta alineada con el hardware y software actuales.
+Estado de la hoja de ruta del **prototipo actual** (ESP32 DevKit + XAMPP + web).
 
-**Leyenda:** ✅ Hecho · 🟡 En curso / parcial · ⬜ Pendiente (requiere hardware o más tiempo)
+> **Nota (mayo 2026):** La fase incremental de mejoras web/firmware se considera **cerrada** para este hardware.  
+> Siguiente trabajo documentado en:
+> - **[SMARTVEST-V2-PLAN.md](./SMARTVEST-V2-PLAN.md)** — plan maestro v2 (híbrido WiFi/LTE/SMS, sin red, checklist; **no implementar aún**)  
+> - [ROADMAP-VISION-IA.md](./ROADMAP-VISION-IA.md) — visión artificial como complemento del ultrasonido  
+> - [HARDWARE-COMPACTO-FUTURO.md](./HARDWARE-COMPACTO-FUTURO.md) — placa más pequeña con GSM+GPS+cámara integrados  
+> - [SMARTVEST-V2-ECUADOR.md](./SMARTVEST-V2-ECUADOR.md) — precios y operadores Ecuador  
+
+**Leyenda:** ✅ Hecho · 🟡 En curso / parcial · ⬜ Pendiente · ⏸ Pausado / siguiente generación
 
 ---
 
@@ -21,7 +28,7 @@ Estado de la hoja de ruta alineada con el hardware y software actuales.
 | A9 | Guía de alertas hápticas en perfil | ✅ | Tarjeta en perfil |
 | A10 | SOS: patrón buzzer/vibrador dedicado | ✅ | Firmware |
 | A11 | Telemetría HTTP más rápida con SOS | ✅ | ~2 s si SOS activo |
-| A12 | SMS SOS (SIM800L) | ✅ | `+593993212257` (0993212257); flashear firmware |
+| A12 | SMS SOS (SIM800L) | ✅ | `+593963930791` (0963930791 cuidador); flashear firmware |
 | A13 | Servidor fijo en LAN | 🟡 | Doc + script IP; despliegue manual |
 | A14 | Documentación mercado y roadmap | ✅ | Este archivo |
 
@@ -31,11 +38,12 @@ Estado de la hoja de ruta alineada con el hardware y software actuales.
 
 | ID | Mejora | Estado | Requisito |
 |----|--------|--------|-----------|
-| B1 | 2.º / 3.er HC-SR04 | ⬜ | Pines GPIO libres |
-| B2 | ADC batería (GPIO34 + divisor) | ⬜ | Soldadura divisor |
-| B3 | ESP32-CAM (UART 22/23) | ⬜ | Validar cruce RX/TX |
-| B4 | IMU caída / inactividad | ⬜ | MPU6050 |
-| B5 | SIM800L en producción (campo) | 🟡 | Config y docs listos; validar señal y saldo en exposición |
+| B1 | 2.º / 3.er HC-SR04 | ⏸ | Pines GPIO libres |
+| B2 | ADC batería (GPIO34 + divisor) | ⏸ | Soldadura divisor |
+| B3 | ESP32-CAM UART (corroboración) | ⏸ | Usuario tiene stream imagen; ver ROADMAP-VISION-IA |
+| B4 | IMU caída / inactividad | ⏸ | MPU6050 |
+| B5 | SIM800L en producción (campo) | 🟡 | Config listo; validar en exposición |
+| B6 | SmartVest v2 (placa + firmware híbrido) | ⏸ | Plan: [SMARTVEST-V2-PLAN.md](./SMARTVEST-V2-PLAN.md) |
 
 ---
 
@@ -43,10 +51,10 @@ Estado de la hoja de ruta alineada con el hardware y software actuales.
 
 | ID | Mejora | Estado |
 |----|--------|--------|
-| C1 | Panel multi-dispositivo (admin) | ⬜ |
-| C2 | Pruebas con usuarios (O&M) | ⬜ |
-| C3 | IA ligera en cámara | ⬜ |
-| C4 | App móvil nativa o TTS en wearable | ⬜ |
+| C1 | Panel multi-dispositivo (admin) | ⏸ |
+| C2 | Pruebas con usuarios (O&M) | ⏸ |
+| C3 | IA ligera en cámara | ⏸ → ROADMAP-VISION-IA |
+| C4 | App móvil nativa o TTS en wearable | ⏸ |
 
 ---
 

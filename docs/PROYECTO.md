@@ -42,7 +42,7 @@ flowchart LR
 4. **Emergencia:** si el botón SOS del chaleco se activa:
    - alerta local (buzzer + vibrador);
    - pantalla roja y notificación en el perfil web del cuidador;
-   - **SMS al contacto de emergencia** (0993212257 vía SIM800L) — ver [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md).
+   - **SMS al cuidador** (0963930791 vía SIM800L) — ver [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md).
 
 ## Qué NO es (alcance actual)
 
@@ -61,8 +61,11 @@ flowchart LR
 | Plan de mejoras | [ROADMAP-MEJORAS.md](./ROADMAP-MEJORAS.md) |
 | Buzzer / vibrador / SOS | [ALERTAS-ACCESIBLES.md](./ALERTAS-ACCESIBLES.md) |
 | IP fija del servidor | [SERVIDOR-FIJO-LAN.md](./SERVIDOR-FIJO-LAN.md) |
-| SMS de emergencia (0993212257) | [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md) |
+| SMS de emergencia (0963930791 cuidador) | [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md) |
 | Presentación / feria | [GUIA-EXPOSICION.md](./GUIA-EXPOSICION.md) |
+| Siguiente fase IA | [ROADMAP-VISION-IA.md](./ROADMAP-VISION-IA.md) |
+| Plan v2 (próxima modificación) | [SMARTVEST-V2-PLAN.md](./SMARTVEST-V2-PLAN.md) |
+| Hardware más pequeño (v2) | [HARDWARE-COMPACTO-FUTURO.md](./HARDWARE-COMPACTO-FUTURO.md) |
 
 ## Relación con el hardware
 

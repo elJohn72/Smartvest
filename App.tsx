@@ -5,6 +5,8 @@ import { LandingPage } from './components/LandingPage';
 import { RegistrationForm } from './components/RegistrationForm';
 import { QRCodeView } from './components/QRCodeView';
 import { UserProfile } from './components/UserProfile';
+import { SettingsPanel } from './components/SettingsPanel';
+import { EmergencyPrintSheet } from './components/EmergencyPrintSheet';
 import { Login } from './components/Login';
 import { Button } from './components/Button';
 import { AppScreen, UserData } from './types';
@@ -171,6 +173,17 @@ const App: React.FC = () => {
     clearUrlParams();
   };
 
+  const handleProfileUpdate = async (user: UserData) => {
+    await saveUser(user);
+    openUserScreen(user, AppScreen.PROFILE);
+    showToast('Perfil actualizado correctamente.', 'success');
+  };
+
+  const handlePrintFicha = () => {
+    window.print();
+    showToast('En la vista previa de impresión verás la ficha médica completa.', 'info');
+  };
+
   const clearUrlParams = () => {
     if (window.location.search) {
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
@@ -180,6 +193,7 @@ const App: React.FC = () => {
 
   return (
     <>
+      {currentUser && <EmergencyPrintSheet user={currentUser} />}
       <Header onLogoClick={handleBackHome} />
       <main id="main-content" className="flex-grow bg-smart-light flex flex-col">
         {isBootstrapping ? (
@@ -225,12 +239,35 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {currentScreen === AppScreen.SETTINGS && currentUser && (
+          <SettingsPanel
+            user={currentUser}
+            onBackToProfile={() => openUserScreen(currentUser, AppScreen.PROFILE)}
+            onEditProfile={() => openUserScreen(currentUser, AppScreen.EDIT_PROFILE)}
+            onViewQr={() => openUserScreen(currentUser, AppScreen.QR_VIEW)}
+            onPrint={handlePrintFicha}
+            onBackHome={handleBackHome}
+          />
+        )}
+
+        {currentScreen === AppScreen.EDIT_PROFILE && currentUser && (
+          <div className="container mx-auto px-4 py-8">
+            <RegistrationForm
+              mode="edit"
+              initialUser={currentUser}
+              onSubmit={handleProfileUpdate}
+              onCancel={() => openUserScreen(currentUser, AppScreen.SETTINGS)}
+            />
+          </div>
+        )}
+
         {currentScreen === AppScreen.PROFILE && (
             currentUser ? (
                 <div className="container mx-auto px-4 py-8">
                     <UserProfile 
                         user={currentUser} 
-                        onBackHome={handleBackHome} 
+                        onBackHome={handleBackHome}
+                        onOpenSettings={() => openUserScreen(currentUser, AppScreen.SETTINGS)}
                     />
                 </div>
             ) : (

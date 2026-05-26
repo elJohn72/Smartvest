@@ -15,16 +15,16 @@ import { DistanceHistoryChart } from './DistanceHistoryChart';
 import { IotHistoryPoint } from '../types';
 import { formatRelativeTime, hasValidGpsFix } from '../utils/formatRelativeTime';
 import { getObstacleLevel, obstacleLevelLabel, obstacleLevelStyles } from '../utils/obstacleLevel';
-import { EmergencyPrintSheet } from './EmergencyPrintSheet';
 import { showToast } from '../services/toastService';
 import { notifySosAlert, requestNotificationPermission } from '../services/notificationService';
 import { playSosAlertSound } from '../utils/alertSound';
 import { HapticGuideCard } from './HapticGuideCard';
-import { Printer, Bell } from 'lucide-react';
+import { Printer, Bell, Settings } from 'lucide-react';
 
 interface Props {
   user: UserData;
   onBackHome?: () => void;
+  onOpenSettings?: () => void;
 }
 
 const isLocalDevHost = (): boolean => {
@@ -35,7 +35,7 @@ const isLocalDevHost = (): boolean => {
   return host === 'localhost' || host === '127.0.0.1';
 };
 
-export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
+export const UserProfile: React.FC<Props> = ({ user, onBackHome, onOpenSettings }) => {
   const showIoTSimulation = isLocalDevHost();
   const [iotData, setIotData] = useState<IotData | null>(null);
   const [isSOS, setIsSOS] = useState(false);
@@ -149,9 +149,7 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
       : 'Sin sensor en PCB';
 
   return (
-    <div className="max-w-3xl mx-auto pb-12 relative print:hidden">
-      <EmergencyPrintSheet user={user} />
-      
+    <div className="print-screen max-w-3xl mx-auto pb-12 relative">
       {/* SOS Full Screen Overlay */}
       {isSOS && (
         <div className="fixed inset-0 z-[100] bg-red-600 animate-pulse flex flex-col items-center justify-center text-white p-4 text-center">
@@ -280,6 +278,16 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
                     >
                         <Cpu size={18} aria-hidden="true" /> {connectionLabel[connectionStatus]}
                     </button>
+                    {onOpenSettings && (
+                      <button
+                        type="button"
+                        onClick={onOpenSettings}
+                        aria-label="Abrir configuración y editar perfil"
+                        className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full font-medium backdrop-blur-sm border border-white/10 transition-colors flex items-center gap-2"
+                      >
+                        <Settings size={18} aria-hidden="true" /> Configuración
+                      </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -302,7 +310,7 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
       )}
 
       {/* Dashboard Grid */}
-      <div className="px-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="px-4 grid grid-cols-1 md:grid-cols-2 gap-6 min-w-0">
 
         <HapticGuideCard />
         
@@ -432,7 +440,7 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome }) => {
             </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 md:col-span-2">
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 md:col-span-2 min-w-0 overflow-hidden">
             <h3 className="font-bold text-slate-800 text-lg mb-1">Historial de distancia</h3>
             <p className="text-sm text-slate-500 mb-4">Últimos minutos según telemetría guardada en el servidor.</p>
             <DistanceHistoryChart points={historyPoints} />

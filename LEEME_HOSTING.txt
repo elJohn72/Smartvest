@@ -15,7 +15,7 @@ OPCIÓN A — XAMPP (recomendada para proyecto completo: web + API + BD)
 
 Documentación detallada: docs/INSTALACION.md
 Exposición del proyecto: docs/GUIA-EXPOSICION.md
-SMS de emergencia (0993212257): docs/SMS-SOS-EMERGENCIA.md
+SMS de emergencia (0963930791 cuidador): docs/SMS-SOS-EMERGENCIA.md
 
 OPCIÓN B — Vercel (solo frontend estático)
 ------------------------------------------

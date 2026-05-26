@@ -37,7 +37,7 @@ Firmware base alineado al esquematico `Schematic_Proyecto-No-Vidente_2025-11-20 
 - Detecta boton SOS
 - Emite telemetria JSON por Serial
 - Puede publicar estado IoT al backend `api/iot.php`
-- Envía SMS por SIM800L al pulsar SOS (configurado: **+593993212257** / 0993212257) — ver [docs/SMS-SOS-EMERGENCIA.md](../../../docs/SMS-SOS-EMERGENCIA.md)
+- Envía SMS por SIM800L al pulsar SOS (configurado: **+593963930791** / 0963930791 cuidador) — ver [docs/SMS-SOS-EMERGENCIA.md](../../../docs/SMS-SOS-EMERGENCIA.md)
 
 ## Configuracion
 

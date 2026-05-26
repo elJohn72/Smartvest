@@ -20,10 +20,10 @@ Cuando el usuario pulsa el **botón SOS** del chaleco (GPIO27), el sistema ejecu
 
 | Campo | Valor |
 |-------|--------|
-| Número local (Ecuador) | **0993212257** |
-| Formato internacional (AT+CMGS) | **+593993212257** |
+| Número local (Ecuador) | **0963930791** (cuidador) |
+| Formato internacional (AT+CMGS) | **+593963930791** |
 | Usuario vinculado en BD | Anthony Perez — `deviceId` **VEST-001** |
-| Teléfono en perfil web (`emergency_phone`) | **0993212257** (mismo contacto) |
+| Teléfono en perfil web (`emergency_phone`) | **0963930791** (debe coincidir con firmware) |
 
 El prefijo `0` del celular ecuatoriano se reemplaza por el código de país `593` en el firmware.
 
@@ -35,7 +35,7 @@ Archivo: `firmware/esp32/platformio-smartvest/include/smartvest_config.h`
 
 ```c
 #define SMARTVEST_ENABLE_SIM800 true
-#define SMARTVEST_SOS_PHONE "+593993212257"
+#define SMARTVEST_SOS_PHONE "+593963930791"
 ```
 
 Plantilla versionada (sin credenciales WiFi): `include/smartvest_config.h.example`
@@ -99,8 +99,8 @@ sequenceDiagram
   U->>SOS: Pulsa SOS
   SOS->>ESP: LOW
   ESP->>ESP: Buzzer + vibrador (alarma)
-  ESP->>GSM: AT+CMGS +593993212257
-  GSM-->>U: SMS al 0993212257
+  ESP->>GSM: AT+CMGS +593963930791
+  GSM-->>U: SMS al 0963930791
   ESP->>API: POST sosActive true
   API->>Web: Polling detecta SOS
   Web-->>U: Pantalla roja + notificación
@@ -131,7 +131,7 @@ pio device monitor --port /dev/cu.usbserial-0001
 Al pulsar SOS deberías ver líneas como:
 
 ```text
-SMS destino: +593993212257
+SMS destino: +593963930791
 SMS SOS -> OK
 ```
 

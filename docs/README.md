@@ -16,7 +16,11 @@
 | 10 | [ROADMAP-MEJORAS.md](./ROADMAP-MEJORAS.md) | Mejoras hechas y pendientes |
 | 11 | [ALERTAS-ACCESIBLES.md](./ALERTAS-ACCESIBLES.md) | Umbrales buzzer/vibrador/SOS |
 | 12 | [SERVIDOR-FIJO-LAN.md](./SERVIDOR-FIJO-LAN.md) | IP fija para el chaleco (no Mac dormido) |
-| 13 | [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md) | SMS SIM800L, número 0993212257, pruebas |
+| 13 | [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md) | SMS SIM800L, cuidador 0963930791, pruebas |
 | 14 | [GUIA-EXPOSICION.md](./GUIA-EXPOSICION.md) | Guion y checklist para presentar el proyecto |
+| 15 | [ROADMAP-VISION-IA.md](./ROADMAP-VISION-IA.md) | Siguiente fase: IA + fusión con ultrasonido |
+| 16 | [HARDWARE-COMPACTO-FUTURO.md](./HARDWARE-COMPACTO-FUTURO.md) | Placas más pequeñas (GSM+GPS+cámara) |
+| 17 | [SMARTVEST-V2-ECUADOR.md](./SMARTVEST-V2-ECUADOR.md) | Precios, bandas LTE Ecuador, WiFi+LTE+SMS |
+| 18 | [SMARTVEST-V2-PLAN.md](./SMARTVEST-V2-PLAN.md) | **Plan maestro v2** (próxima modificación; no código aún) |
 
 **Raíz del repo:** [README.md](../README.md) · **Agentes IA:** [AGENTS.md](../AGENTS.md) · **Firmware:** [firmware/esp32/platformio-smartvest/README.md](../firmware/esp32/platformio-smartvest/README.md)

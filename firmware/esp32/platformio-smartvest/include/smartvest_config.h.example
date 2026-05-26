@@ -13,7 +13,7 @@
 /** true solo si SIM800L está cableado, con antena y SIM con saldo */
 #define SMARTVEST_ENABLE_SIM800 true
 /** Número de emergencia (Ecuador: 09xxxxxxxx → +5939xxxxxxxx) */
-#define SMARTVEST_SOS_PHONE "+593993212257"
+#define SMARTVEST_SOS_PHONE "+593963930791"
 
 /** ADC de batería: -1 = sin sensor (PCB actual). Si añades divisor 2:1 a un pin ADC libre, usa 34, 35, 36 o 39. */
 #ifndef SMARTVEST_BATTERY_ADC_PIN

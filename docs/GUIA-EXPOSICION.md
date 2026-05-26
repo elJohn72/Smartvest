@@ -31,7 +31,7 @@ Material para **presentar el proyecto** en ferias, defensas de tesis o demostrac
 | 2 | Acercar la mano al ultrasonido | Cambia distancia en la web (ej. ~214 cm → menos) |
 | 3 | Alejar / acercar obstáculo | Colores y vibración según umbrales (ver ALERTAS-ACCESIBLES) |
 | 4 | Pulsar **botón SOS** | Pantalla roja en web + sonido en PC del cuidador |
-| 5 | Mostrar celular **0993212257** | Llega SMS con `VEST-001` y mapa si hay GPS |
+| 5 | Mostrar celular del cuidador **0963930791** | Llega SMS con `VEST-001` y mapa si hay GPS |
 | 6 | Escanear **QR** impreso | Acceso a datos médicos sin login |
 
 **Duración total recomendada:** 5–8 minutos + preguntas.
@@ -67,7 +67,7 @@ Material para **presentar el proyecto** en ferias, defensas de tesis o demostrac
 |------|--------|
 | Dispositivo | `VEST-001` |
 | Usuario de prueba | Anthony Perez |
-| SMS emergencia | 0993212257 / +593993212257 |
+| SMS emergencia (cuidador) | 0963930791 / +593963930791 |
 | Institución (landing) | Unidad Educativa Andrés Bello, Quinindé |
 | Contacto proyecto | contacto@smartvest.app |
 
@@ -98,7 +98,7 @@ Se ofrecen tres modos (texto offline, enlace con datos, solo ID). Para exposici�
 |-----------|------|
 | [PROYECTO.md](./PROYECTO.md) | Visión general |
 | [ARQUITECTURA.md](./ARQUITECTURA.md) | Diagramas web + API + ESP32 |
-| [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md) | SMS al 0993212257 |
+| [SMS-SOS-EMERGENCIA.md](./SMS-SOS-EMERGENCIA.md) | SMS al cuidador 0963930791 |
 | [COMPARATIVA-MERCADO.md](./COMPARATIVA-MERCADO.md) | Estado del arte |
 | [ROADMAP-MEJORAS.md](./ROADMAP-MEJORAS.md) | Trabajo futuro |
 | [FUNCIONALIDADES.md](./FUNCIONALIDADES.md) | Lista de features |

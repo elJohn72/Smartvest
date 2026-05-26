@@ -120,7 +120,7 @@ Configuración actual en `smartvest_config.h`:
 
 ```c
 #define SMARTVEST_ENABLE_SIM800 true
-#define SMARTVEST_SOS_PHONE "+593993212257"   /* 0993212257 */
+#define SMARTVEST_SOS_PHONE "+593963930791"   /* 0963930791 cuidador */
 ```
 
 Requiere módulo SIM800L con antena, SIM activa y registro en red GSM.
