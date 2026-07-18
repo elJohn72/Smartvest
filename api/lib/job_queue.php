@@ -8,8 +8,8 @@ declare(strict_types=1);
  */
 function queue_dir(): string
 {
-    // /tmp suele ser escribible por Apache y por tu usuario CLI.
-    $dir = rtrim(sys_get_temp_dir(), '/') . '/smartvest_queue';
+    // Ruta fija: Apache XAMPP y PHP CLI no comparten sys_get_temp_dir() en macOS.
+    $dir = '/tmp/smartvest_queue';
     if (!is_dir($dir)) {
         @mkdir($dir, 0777, true);
     }
