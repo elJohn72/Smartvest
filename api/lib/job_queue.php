@@ -8,19 +8,32 @@ declare(strict_types=1);
  */
 function queue_dir(): string
 {
-    // Carpeta del proyecto: writable por Apache en XAMPP.
-    $dir = dirname(__DIR__) . '/runtime/queue';
+    // /tmp suele ser escribible por Apache y por tu usuario CLI.
+    $dir = rtrim(sys_get_temp_dir(), '/') . '/smartvest_queue';
     if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
+        @mkdir($dir, 0777, true);
     }
+    @chmod($dir, 0777);
+
     foreach (['pending', 'processing', 'done', 'failed'] as $sub) {
         $path = $dir . '/' . $sub;
         if (!is_dir($path)) {
-            mkdir($path, 0777, true);
+            @mkdir($path, 0777, true);
         }
+        @chmod($path, 0777);
     }
 
     return $dir;
+}
+
+function queue_write_json(string $path, array $data): void
+{
+    file_put_contents(
+        $path,
+        json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
+        LOCK_EX
+    );
+    @chmod($path, 0666);
 }
 
 function queue_push(string $type, array $payload = []): string
@@ -34,12 +47,7 @@ function queue_push(string $type, array $payload = []): string
         'attempts' => 0,
     ];
 
-    $path = queue_dir() . '/pending/' . $id . '.json';
-    file_put_contents(
-        $path,
-        json_encode($job, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
-        LOCK_EX
-    );
+    queue_write_json(queue_dir() . '/pending/' . $id . '.json', $job);
 
     return $id;
 }
@@ -60,6 +68,7 @@ function queue_claim_next(): ?array
     if (!@rename($source, $dest)) {
         return null;
     }
+    @chmod($dest, 0666);
 
     $raw = file_get_contents($dest);
     if ($raw === false) {
@@ -73,7 +82,7 @@ function queue_claim_next(): ?array
 
     $job['attempts'] = ((int) ($job['attempts'] ?? 0)) + 1;
     $job['claimed_at'] = gmdate('c');
-    file_put_contents($dest, json_encode($job, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
+    @queue_write_json($dest, $job);
 
     return $job;
 }
@@ -93,7 +102,7 @@ function queue_complete(array $job, bool $ok, string $message = ''): void
     $job['ok'] = $ok;
     $job['message'] = $message;
 
-    file_put_contents($target, json_encode($job, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
+    queue_write_json($target, $job);
     if (is_file($processing)) {
         @unlink($processing);
     }
