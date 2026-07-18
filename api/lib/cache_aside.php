@@ -8,9 +8,10 @@ declare(strict_types=1);
  */
 function cache_dir(): string
 {
-    $dir = sys_get_temp_dir() . '/smartvest_cache';
+    // Dentro del proyecto para que Apache (XAMPP) pueda escribir (sys temp a veces no).
+    $dir = dirname(__DIR__) . '/runtime/cache';
     if (!is_dir($dir)) {
-        mkdir($dir, 0775, true);
+        mkdir($dir, 0777, true);
     }
 
     return $dir;

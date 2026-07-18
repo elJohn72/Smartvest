@@ -14,6 +14,8 @@ dist-ssr
 .pio
 firmware/esp32/platformio-smartvest/include/smartvest_config.h
 api/config.local.php
+api/runtime/
+.tunnel/
 
 # Editor directories and files
 .vscode/*

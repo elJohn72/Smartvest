@@ -8,14 +8,15 @@ declare(strict_types=1);
  */
 function queue_dir(): string
 {
-    $dir = sys_get_temp_dir() . '/smartvest_queue';
+    // Carpeta del proyecto: writable por Apache en XAMPP.
+    $dir = dirname(__DIR__) . '/runtime/queue';
     if (!is_dir($dir)) {
-        mkdir($dir, 0775, true);
+        mkdir($dir, 0777, true);
     }
     foreach (['pending', 'processing', 'done', 'failed'] as $sub) {
         $path = $dir . '/' . $sub;
         if (!is_dir($path)) {
-            mkdir($path, 0775, true);
+            mkdir($path, 0777, true);
         }
     }
 
