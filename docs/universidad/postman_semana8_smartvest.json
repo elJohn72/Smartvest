@@ -1,0 +1,73 @@
+{
+  "info": {
+    "name": "SmartVest Semana 8 — Optimización backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost/Smartvest/api" },
+    { "key": "token", "value": "" },
+    { "key": "iotKey", "value": "smartvest-local-dev-key" },
+    { "key": "username", "value": "demo.s8@smartvest.local" },
+    { "key": "password", "value": "DemoS8!2026" }
+  ],
+  "item": [
+    {
+      "name": "1. Login (obtener token)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"login\",\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/users.php"
+      }
+    },
+    {
+      "name": "2. ANTES — dashboard N+1",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/dashboard.php?mode=n1"
+      }
+    },
+    {
+      "name": "3. DESPUÉS — dashboard eager",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/dashboard.php"
+      }
+    },
+    {
+      "name": "4. DESPUÉS — dashboard cache HIT",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/dashboard.php"
+      }
+    },
+    {
+      "name": "5. POST IoT (encola jobs)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Smartvest-Api-Key", "value": "{{iotKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"deviceId\": \"VEST-DEMO\",\n  \"distanceCm\": 42,\n  \"latitude\": -0.180653,\n  \"longitude\": -78.467834,\n  \"sosActive\": true,\n  \"batteryLevel\": 80\n}"
+        },
+        "url": "{{baseUrl}}/iot.php"
+      }
+    },
+    {
+      "name": "6. GET users (cache-aside + lazy photo)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/users.php"
+      }
+    }
+  ]
+}

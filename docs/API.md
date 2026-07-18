@@ -26,6 +26,7 @@ Copia desde `config.local.php.example`:
 ```php
 const SMARTVEST_IOT_API_KEY = 'tu-clave-secreta-iot';
 const SMARTVEST_GEMINI_API_KEY = 'AIza...';
+const SMARTVEST_GROQ_API_KEY = 'gsk_...';
 ```
 
 ---
@@ -76,6 +77,28 @@ Devuelve puntos ordenados del más antiguo al más reciente (tabla `iot_history`
 
 ---
 
+## Optimización Semana 8 (cache / N+1 / cola / auth)
+
+| Pieza | Archivo | Qué hace |
+|-------|---------|----------|
+| Cache-aside | `api/lib/cache_aside.php` | TTL + invalidación en lecturas users/IoT/dashboard |
+| Cola async | `api/lib/job_queue.php` + `api/worker.php` | `prune_iot_history` y `notify_sos` fuera del HTTP |
+| Auth token | `api/lib/auth_token.php` | HMAC tras login; sin reconsultar password |
+| Anti N+1 | `api/dashboard.php` | `LEFT JOIN` users↔iot_states (`?mode=n1` demo) |
+
+```bash
+/Applications/XAMPP/xamppfiles/bin/php api/worker.php --once
+```
+
+Login ahora puede devolver `token`. Usarlo así:
+
+```http
+Authorization: Bearer <token>
+GET /Smartvest/api/dashboard.php
+```
+
+---
+
 ## `users.php`
 
 ### GET — listar o buscar uno
@@ -93,6 +116,8 @@ Respuesta (sin passwords):
   "users": [ { "id": "...", "fullName": "...", "deviceId": "VEST-001" } ]
 }
 ```
+
+El listado aplica **cache-aside** y omite `photo` (lazy): la foto se pide con `?id=`.
 
 ### POST — acciones
 
@@ -169,6 +194,51 @@ X-SmartVest-Api-Key: smartvest-local-dev-key
 ```
 
 Sin cabecera válida → **401** `No autorizado`.
+
+---
+
+## `assistant.php`
+
+Análisis de riesgo, lugares frecuentes, eventos SOS y chat con contexto del paciente/chaleco. Usa estadística sobre `iot_history` + narrativa opcional con **Groq** (`llama-3.3-70b-versatile` por defecto).
+
+```http
+POST /Smartvest/api/assistant.php
+Content-Type: application/json
+
+{ "action": "analyze", "userId": "<uuid>", "deviceId": "VEST-001" }
+```
+
+```json
+{
+  "success": true,
+  "analytics": { "riskScore": 42, "dailyRiskLevel": "medio", "frequentPlaces": [], "sosEvents": [] },
+  "insights": "## Resumen del día\n...",
+  "aiPowered": true
+}
+```
+
+**Chat:**
+
+```http
+POST /Smartvest/api/assistant.php
+Content-Type: application/json
+
+{
+  "action": "chat",
+  "userId": "<uuid>",
+  "deviceId": "VEST-001",
+  "messages": [{ "role": "user", "content": "¿Está en línea el chaleco?" }]
+}
+```
+
+En `api/config.local.php`:
+
+```php
+const SMARTVEST_GROQ_API_KEY = 'gsk_...';
+const SMARTVEST_GROQ_MODEL = 'llama-3.3-70b-versatile'; // opcional
+```
+
+Sin `SMARTVEST_GROQ_API_KEY` el endpoint sigue respondiendo con métricas estadísticas y respuestas locales en el chat.
 
 ---
 

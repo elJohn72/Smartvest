@@ -16,6 +16,14 @@ if (is_file($localConfigPath)) {
     require $localConfigPath;
 }
 
+require_once __DIR__ . '/lib/cache_aside.php';
+require_once __DIR__ . '/lib/job_queue.php';
+require_once __DIR__ . '/lib/auth_token.php';
+
+/** TTL cache-aside (segundos) — lecturas frecuentes de listados / IoT */
+const SMARTVEST_CACHE_TTL_USERS = 30;
+const SMARTVEST_CACHE_TTL_IOT = 5;
+
 function send_security_headers(): void
 {
     header('X-Content-Type-Options: nosniff');
@@ -102,6 +110,34 @@ function get_gemini_api_key(): string
     }
 
     return '';
+}
+
+function get_groq_api_key(): string
+{
+    if (defined('SMARTVEST_GROQ_API_KEY') && SMARTVEST_GROQ_API_KEY !== '') {
+        return SMARTVEST_GROQ_API_KEY;
+    }
+
+    $fromEnv = getenv('GROQ_API_KEY') ?: getenv('SMARTVEST_GROQ_API_KEY');
+    if (is_string($fromEnv) && $fromEnv !== '') {
+        return $fromEnv;
+    }
+
+    return '';
+}
+
+function get_groq_model(): string
+{
+    if (defined('SMARTVEST_GROQ_MODEL') && SMARTVEST_GROQ_MODEL !== '') {
+        return SMARTVEST_GROQ_MODEL;
+    }
+
+    $fromEnv = getenv('SMARTVEST_GROQ_MODEL');
+    if (is_string($fromEnv) && $fromEnv !== '') {
+        return $fromEnv;
+    }
+
+    return 'llama-3.3-70b-versatile';
 }
 
 function require_iot_api_key(): void

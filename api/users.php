@@ -11,22 +11,42 @@ if ($method === 'GET') {
     $id = $_GET['id'] ?? null;
 
     if ($id) {
-        $statement = $pdo->prepare('SELECT * FROM users WHERE id = :id LIMIT 1');
-        $statement->execute(['id' => $id]);
-        $user = $statement->fetch();
+        $cacheKey = 'users:id:' . $id;
+        $user = cache_remember($cacheKey, SMARTVEST_CACHE_TTL_USERS, static function () use ($pdo, $id) {
+            $statement = $pdo->prepare(
+                'SELECT id, full_name, national_id, age, blood_type, address, emergency_phone,
+                        emergency_contact, medical_observations, created_at, photo, username, device_id
+                 FROM users WHERE id = :id LIMIT 1'
+            );
+            $statement->execute(['id' => $id]);
+            $row = $statement->fetch();
+
+            return $row ? public_user_row($row) : null;
+        });
 
         json_response([
             'success' => true,
-            'user' => $user ? public_user_row($user) : null,
+            'user' => $user,
+            'cacheTtlSeconds' => SMARTVEST_CACHE_TTL_USERS,
         ]);
     }
 
-    $statement = $pdo->query('SELECT * FROM users ORDER BY created_at DESC');
-    $users = array_map('public_user_row', $statement->fetchAll());
+    $users = cache_remember('users:list:v1', SMARTVEST_CACHE_TTL_USERS, static function () use ($pdo) {
+        // Lazy projection: sin password ni photo pesada en listado (justificación lazy vs eager).
+        $statement = $pdo->query(
+            'SELECT id, full_name, national_id, age, blood_type, address, emergency_phone,
+                    emergency_contact, medical_observations, created_at, NULL AS photo, username, device_id
+             FROM users ORDER BY created_at DESC'
+        );
+
+        return array_map('public_user_row', $statement->fetchAll());
+    });
 
     json_response([
         'success' => true,
         'users' => $users,
+        'cacheTtlSeconds' => SMARTVEST_CACHE_TTL_USERS,
+        'note' => 'Listado con cache-aside; photo omitida (lazy) — cargar con GET ?id= si se necesita.',
     ]);
 }
 
@@ -59,9 +79,15 @@ if ($action === 'login') {
         $update->execute(['password' => $hashed, 'id' => $user['id']]);
     }
 
+    $public = public_user_row($user);
+    $token = issue_auth_token((string) $user['id'], (string) ($user['username'] ?? ''), 3600);
+
     json_response([
         'success' => true,
-        'user' => public_user_row($user),
+        'user' => $public,
+        'token' => $token,
+        'tokenTtlSeconds' => 3600,
+        'authNote' => 'Usa Authorization: Bearer <token> en dashboard.php — sin reconsultar password en BD.',
     ]);
 }
 
@@ -81,6 +107,8 @@ if ($action === 'import') {
         $count++;
     }
 
+    invalidate_users_cache();
+
     json_response([
         'success' => true,
         'count' => $count,
@@ -89,7 +117,19 @@ if ($action === 'import') {
 }
 
 upsert_user($pdo, $payload);
+invalidate_users_cache((string) ($payload['id'] ?? ''));
 json_response(['success' => true]);
+
+function invalidate_users_cache(string $userId = ''): void
+{
+    cache_forget('users:list:v1');
+    cache_forget('dashboard:eager:v1');
+    if ($userId !== '') {
+        cache_forget('users:id:' . $userId);
+    } else {
+        cache_forget_prefix('users:id:');
+    }
+}
 
 function upsert_user(PDO $pdo, array $user): void
 {

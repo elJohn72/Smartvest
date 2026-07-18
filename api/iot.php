@@ -58,40 +58,48 @@ if ($method === 'GET') {
     if (isset($_GET['history'])) {
         $limit = (int) ($_GET['limit'] ?? 60);
         $limit = max(10, min(120, $limit));
+        $cacheKey = "iot:history:{$deviceId}:{$limit}";
 
-        $historyStatement = $pdo->prepare(
-            'SELECT device_id, distance_cm, latitude, longitude, sos_active, battery_level, recorded_at
-            FROM iot_history
-            WHERE device_id = :device_id
-            ORDER BY recorded_at DESC
-            LIMIT :limit_rows'
-        );
-        $historyStatement->bindValue('device_id', $deviceId);
-        $historyStatement->bindValue('limit_rows', $limit, PDO::PARAM_INT);
-        $historyStatement->execute();
+        $points = cache_remember($cacheKey, SMARTVEST_CACHE_TTL_IOT, static function () use ($pdo, $deviceId, $limit) {
+            $historyStatement = $pdo->prepare(
+                'SELECT device_id, distance_cm, latitude, longitude, sos_active, battery_level, recorded_at
+                FROM iot_history
+                WHERE device_id = :device_id
+                ORDER BY recorded_at DESC
+                LIMIT :limit_rows'
+            );
+            $historyStatement->bindValue('device_id', $deviceId);
+            $historyStatement->bindValue('limit_rows', $limit, PDO::PARAM_INT);
+            $historyStatement->execute();
 
-        $points = [];
-        foreach ($historyStatement->fetchAll() as $row) {
-            $points[] = map_iot_row($row);
-        }
+            $mapped = [];
+            foreach ($historyStatement->fetchAll() as $row) {
+                $mapped[] = map_iot_row($row);
+            }
+
+            return array_reverse($mapped);
+        });
 
         json_response([
             'success' => true,
-            'data' => array_reverse($points),
+            'data' => $points,
+            'cacheTtlSeconds' => SMARTVEST_CACHE_TTL_IOT,
         ]);
     }
 
-    $statement = $pdo->prepare('SELECT * FROM iot_states WHERE device_id = :device_id LIMIT 1');
-    $statement->execute(['device_id' => $deviceId]);
-    $row = $statement->fetch();
+    $cacheKey = 'iot:state:' . $deviceId;
+    $data = cache_remember($cacheKey, SMARTVEST_CACHE_TTL_IOT, static function () use ($pdo, $deviceId) {
+        $statement = $pdo->prepare('SELECT * FROM iot_states WHERE device_id = :device_id LIMIT 1');
+        $statement->execute(['device_id' => $deviceId]);
+        $row = $statement->fetch();
 
-    if (!$row) {
-        json_response(['success' => true, 'data' => null]);
-    }
+        return $row ? map_iot_row($row) : null;
+    });
 
     json_response([
         'success' => true,
-        'data' => map_iot_row($row),
+        'data' => $data,
+        'cacheTtlSeconds' => SMARTVEST_CACHE_TTL_IOT,
     ]);
 }
 
@@ -153,10 +161,30 @@ $historyStatement->execute([
     'battery_level' => $hasBatteryLevel ? (int) $payload['batteryLevel'] : null,
 ]);
 
-try {
-    prune_iot_history($pdo, $deviceId);
-} catch (PDOException $exception) {
-    // Tabla aún no migrada: la telemetría actual sigue guardándose en iot_states.
+// Invalidación cache-aside tras escritura
+cache_forget('iot:state:' . $deviceId);
+cache_forget_prefix('iot:history:' . $deviceId . ':');
+cache_forget('dashboard:eager:v1');
+
+$queued = [];
+
+// Trabajo pesado fuera del request HTTP (cola + worker)
+$queued[] = queue_push('prune_iot_history', [
+    'deviceId' => $deviceId,
+    'maxRows' => 500,
+]);
+
+if (!empty($params['sos_active'])) {
+    $queued[] = queue_push('notify_sos', [
+        'deviceId' => $deviceId,
+        'latitude' => $params['latitude'],
+        'longitude' => $params['longitude'],
+    ]);
 }
 
-json_response(['success' => true]);
+json_response([
+    'success' => true,
+    'queuedJobs' => $queued,
+    'queueStats' => queue_stats(),
+    'note' => 'Prune/SOS van a cola async. Ejecuta: php api/worker.php --once',
+]);
