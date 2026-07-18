@@ -1,0 +1,9 @@
+# Conservar Authorization para PHP (si el host lo permite)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+# Fallback CGI
+CGIPassAuth On

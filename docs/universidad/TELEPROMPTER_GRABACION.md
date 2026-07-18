@@ -15,9 +15,9 @@ Soy John Miraba. En este taller optimizo el backend real de SmartVest, con PHP y
 
 ### 1 · Login
 
-En Postman hago login. La API me devuelve un token. Ese token lo uso en Authorization Bearer, sin volver a pedir el password a la base.
+En Postman hago login. La API me devuelve un token. Ese token lo mando en el header X-Smartvest-Token, sin volver a pedir el password a la base.
 
-*(Ejecuta: 1. Login → copia `token` a la variable `token`)*
+*(Ejecuta: 1. Login → copia el valor `token` a la variable de colección `token`)*
 
 ### 2 · Antes — N+1
 

@@ -59,9 +59,9 @@ fi
 echo "   token OK"
 
 echo "==> Smoke tests (N+1 / eager / cache / cola)..."
-N1=$(curl -s "$BASE/dashboard.php?mode=n1" -H "Authorization: Bearer $TOKEN")
-EAGER=$(curl -s "$BASE/dashboard.php" -H "Authorization: Bearer $TOKEN")
-CACHE=$(curl -s "$BASE/dashboard.php" -H "Authorization: Bearer $TOKEN")
+N1=$(curl -s "$BASE/dashboard.php?mode=n1" -H "X-Smartvest-Token: $TOKEN")
+EAGER=$(curl -s "$BASE/dashboard.php" -H "X-Smartvest-Token: $TOKEN")
+CACHE=$(curl -s "$BASE/dashboard.php" -H "X-Smartvest-Token: $TOKEN")
 IOT=$(curl -s -X POST "$BASE/iot.php" \
   -H "Content-Type: application/json" \
   -H "X-Smartvest-Api-Key: $IOT_KEY" \

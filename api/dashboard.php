@@ -5,6 +5,8 @@ declare(strict_types=1);
 /**
  * Listado users + estado IoT en UNA query (eager / anti N+1).
  * Comparar con: GET users.php + N × GET iot.php?deviceId=...
+ *
+ * Auth: preferir header X-Smartvest-Token (Apache a veces elimina Authorization).
  */
 require __DIR__ . '/config.php';
 

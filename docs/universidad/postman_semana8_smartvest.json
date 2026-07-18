@@ -13,6 +13,19 @@
   "item": [
     {
       "name": "1. Login (obtener token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const j = pm.response.json();",
+              "if (j.token) { pm.collectionVariables.set('token', j.token); }",
+              "pm.test('Login OK', () => pm.expect(j.success).to.eql(true));"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -27,7 +40,7 @@
       "name": "2. ANTES — dashboard N+1",
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "header": [{ "key": "X-Smartvest-Token", "value": "{{token}}" }],
         "url": "{{baseUrl}}/dashboard.php?mode=n1"
       }
     },
@@ -35,7 +48,7 @@
       "name": "3. DESPUÉS — dashboard eager",
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "header": [{ "key": "X-Smartvest-Token", "value": "{{token}}" }],
         "url": "{{baseUrl}}/dashboard.php"
       }
     },
@@ -43,7 +56,7 @@
       "name": "4. DESPUÉS — dashboard cache HIT",
       "request": {
         "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "header": [{ "key": "X-Smartvest-Token", "value": "{{token}}" }],
         "url": "{{baseUrl}}/dashboard.php"
       }
     },
