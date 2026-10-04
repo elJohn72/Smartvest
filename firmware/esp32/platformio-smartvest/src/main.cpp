@@ -92,6 +92,7 @@ String gpsLineBuffer;
 float currentDistanceCm = 9999.0f;
 bool sosPressed = false;
 bool sosEdgeLatched = false;
+bool sosLatched = false;
 int batteryLevel = -1;
 
 AlertPattern currentPattern;
@@ -188,8 +189,10 @@ void loop() {
   sosPressed = digitalRead(Pins::sos) == LOW;
   if (sosPressed && !sosEdgeLatched) {
     sosEdgeLatched = true;
+    sosLatched = !sosLatched;
+    Serial.println(sosLatched ? "SOS activo; pulsa otra vez para desactivar" : "SOS desactivado");
 
-    if (SMARTVEST_ENABLE_SIM800) {
+    if (sosLatched && SMARTVEST_ENABLE_SIM800) {
       String message = String("ALERTA SOS SmartVest\n") +
                        "deviceId: " + SMARTVEST_DEVICE_ID + "\n" +
                        "Distancia: " + String(currentDistanceCm, 0) + " cm\n";
@@ -213,7 +216,8 @@ void loop() {
     sosEdgeLatched = false;
   }
 
-  if (sosPressed) {
+  const bool sosActive = sosPressed || sosLatched;
+  if (sosActive) {
     applySosAlertPattern();
   } else {
     applyAlertPattern();
@@ -227,7 +231,7 @@ void loop() {
   }
 
   const unsigned long httpInterval =
-      sosPressed ? kHttpIntervalSosMs : SMARTVEST_HTTP_INTERVAL_MS;
+      sosActive ? kHttpIntervalSosMs : SMARTVEST_HTTP_INTERVAL_MS;
 
   if (SMARTVEST_WIFI_ENABLED && now - lastHttpPublishMs >= httpInterval) {
     lastHttpPublishMs = now;
@@ -454,7 +458,7 @@ void publishTelemetryToApi() {
                    "\"distanceCm\":" + String(currentDistanceCm, 1) + "," +
                    "\"latitude\":" + String(gpsState.fix ? gpsState.latitude : 0.0, 6) + "," +
                    "\"longitude\":" + String(gpsState.fix ? gpsState.longitude : 0.0, 6) + "," +
-                   "\"sosActive\":" + String(sosPressed ? "true" : "false");
+                   "\"sosActive\":" + String((sosPressed || sosLatched) ? "true" : "false");
 
   if (batteryLevel >= 0) {
     payload += ",\"batteryLevel\":" + String(batteryLevel);
@@ -486,7 +490,7 @@ String buildTelemetryJson() {
                 "\"gpsFix\":" + String(gpsState.fix ? "true" : "false") + "," +
                 "\"latitude\":" + String(gpsState.latitude, 6) + "," +
                 "\"longitude\":" + String(gpsState.longitude, 6) + "," +
-                "\"sosActive\":" + String(sosPressed ? "true" : "false") + ",";
+                "\"sosActive\":" + String((sosPressed || sosLatched) ? "true" : "false") + ",";
 
   if (batteryLevel >= 0) {
     json += "\"batteryLevel\":" + String(batteryLevel);

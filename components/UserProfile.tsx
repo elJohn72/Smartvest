@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { UserData, IotData } from '../types';
 import { Button } from './Button';
-import { Phone, MapPin, User, Activity, Home, AlertTriangle, Battery, Navigation, Cpu, X } from 'lucide-react';
+import { Phone, MapPin, User, Activity, Home, AlertTriangle, Battery, Navigation, Cpu, Radio, X } from 'lucide-react';
 import {
   subscribeToDevice,
   subscribeToConnectionStatus,
@@ -120,6 +120,8 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome, onOpenSettings 
   };
 
   const gpsReady = iotData ? hasValidGpsFix(iotData.latitude, iotData.longitude) : false;
+  const browserNotificationsAvailable =
+    typeof window !== 'undefined' && 'Notification' in window;
   const obstacleLevel = getObstacleLevel(iotData?.distanceCm);
   const obstacleStyle = obstacleLevelStyles[obstacleLevel];
 
@@ -133,7 +135,9 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome, onOpenSettings 
 
   const openMaps = () => {
     if (iotData && gpsReady) {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${iotData.latitude},${iotData.longitude}`, '_blank', 'noopener,noreferrer');
+      // Navigate the WebView so its native wrapper can hand the Maps URL to Android.
+      // window.open is blocked by the installed APK's single-window WebView config.
+      window.location.assign(`https://www.google.com/maps/search/?api=1&query=${iotData.latitude},${iotData.longitude}`);
     }
   };
 
@@ -157,15 +161,22 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome, onOpenSettings 
            <h1 className="text-5xl font-black mb-4">¡ALERTA SOS!</h1>
            <p className="text-2xl mb-8">El usuario ha activado el botón de pánico.</p>
            <div className="flex gap-4 flex-col w-full max-w-md">
-             <a href={`tel:${user.emergencyPhone}`} className="bg-white text-red-600 py-4 rounded-full font-bold text-xl shadow-xl hover:bg-gray-100 flex items-center justify-center gap-2">
-               <Phone /> Llamar a Emergencia
+             <a href={`tel:${user.emergencyPhone}`} aria-label={`Llamar al contacto de emergencia ${user.emergencyPhone}`} className="bg-white text-red-600 py-4 rounded-full font-bold text-xl shadow-xl hover:bg-gray-100 flex items-center justify-center gap-2">
+               <Phone /> Llamar a Emergencia · {user.emergencyPhone}
              </a>
-             <button 
-                onClick={openMaps}
-                className="bg-black/30 border-2 border-white text-white py-4 rounded-full font-bold text-xl hover:bg-black/50 flex items-center justify-center gap-2"
-             >
-               <Navigation /> Ver Ubicación
-             </button>
+             {gpsReady ? (
+               <button
+                  type="button"
+                  onClick={openMaps}
+                  className="bg-black/30 border-2 border-white text-white py-4 rounded-full font-bold text-xl hover:bg-black/50 flex items-center justify-center gap-2"
+               >
+                 <Navigation /> Ver Ubicación del chaleco
+               </button>
+             ) : (
+               <p role="status" className="rounded-xl border border-white/40 bg-black/30 px-4 py-3 text-base font-semibold flex items-center justify-center gap-2">
+                 <Navigation size={20} /> GPS del chaleco sin ubicación: no ha enviado coordenadas válidas.
+               </p>
+             )}
               {showIoTSimulation && (
                 <button
                   type="button"
@@ -293,7 +304,7 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome, onOpenSettings 
         </div>
       </div>
 
-      {notificationPermission !== 'granted' && (
+      {browserNotificationsAvailable && notificationPermission !== 'granted' && (
         <div className="mx-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <Bell size={20} className="shrink-0" aria-hidden="true" />
           <p className="flex-1">
@@ -459,6 +470,31 @@ export const UserProfile: React.FC<Props> = ({ user, onBackHome, onOpenSettings 
                 </div>
             </div>
         </div>
+
+        <div className={`p-6 rounded-2xl shadow-lg border-2 ${isSOS ? 'border-red-300 bg-red-50' : 'border-slate-100 bg-white'}`}>
+            <h3 className="font-bold text-slate-800 text-lg mb-2 flex items-center gap-2">
+              <AlertTriangle className={isSOS ? 'text-red-600' : 'text-slate-500'} aria-hidden="true" />
+              Botón SOS del chaleco
+            </h3>
+            <p className={`font-semibold ${isSOS ? 'text-red-700' : 'text-slate-700'}`}>
+              {isSOS ? 'Alerta recibida: SOS activo' : 'En espera del botón físico'}
+            </p>
+            <p className="text-sm text-slate-600 mt-2">
+              Al pulsar el botón del chaleco, la ESP32 reporta SOS y esta aplicación muestra la alerta de emergencia. Una segunda pulsación desactiva la alerta.
+            </p>
+          </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
+            <h3 className="font-bold text-slate-800 text-lg mb-2 flex items-center gap-2">
+              <Radio className="text-blue-600" aria-hidden="true" />
+              GSM / SMS
+            </h3>
+            <p className="font-semibold text-slate-700">Envío asociado al evento SOS</p>
+            <p className="text-sm text-slate-600 mt-2">
+              Si el SIM800L está conectado y habilitado, el firmware intenta enviar un SMS al contacto de emergencia.
+              La app recibe el estado SOS, pero no recibe confirmación de señal GSM ni de entrega del mensaje.
+            </p>
+          </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
             <h3 className="font-bold text-slate-400 text-sm uppercase tracking-wider mb-4">Información Médica</h3>
