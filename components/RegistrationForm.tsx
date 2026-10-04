@@ -149,16 +149,10 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel, initialU
   };
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+    <form noValidate onSubmit={handleSubmit} className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200">
       <h2 className="text-3xl font-bold text-smart-dark mb-8 border-b pb-4">
         {isEdit ? 'Editar perfil de la persona' : 'Nuevo Registro'}
       </h2>
-
-      {formError && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert" aria-live="polite">
-          {formError}
-        </div>
-      )}
       
       <div className="mb-8 flex flex-col items-center justify-center">
         <div className="relative w-32 h-32 mb-4 group">
@@ -338,6 +332,12 @@ export const RegistrationForm: React.FC<Props> = ({ onSubmit, onCancel, initialU
           />
         </div>
       </div>
+
+      {formError && (
+        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert" aria-live="assertive">
+          {formError}
+        </div>
+      )}
 
       <div className="flex flex-col-reverse md:flex-row gap-4 mt-8">
         <Button type="button" variant="secondary" onClick={onCancel} fullWidth>
