@@ -91,6 +91,103 @@ if ($action === 'login') {
     ]);
 }
 
+if ($action === 'register_lab' || $action === 'delete_lab') {
+    $username = trim((string) ($payload['username'] ?? ''));
+    $password = (string) ($payload['password'] ?? '');
+
+    if (!str_starts_with($username, 'eva.lab.')) {
+        json_response([
+            'success' => false,
+            'message' => 'Solo se admite un usuario de laboratorio con prefijo eva.lab.',
+        ], 403);
+    }
+
+    if ($action === 'delete_lab') {
+        if ($password === '') {
+            json_response(['success' => false, 'message' => 'La contraseña es obligatoria para eliminar.'], 400);
+        }
+
+        $statement = $pdo->prepare('SELECT id, username, password FROM users WHERE username = :username LIMIT 1');
+        $statement->execute(['username' => $username]);
+        $user = $statement->fetch();
+
+        if (!$user || !verify_password((string) ($user['password'] ?? ''), $password)) {
+            json_response(['success' => false, 'message' => 'Usuario o contraseña incorrectos.'], 401);
+        }
+
+        $delete = $pdo->prepare('DELETE FROM users WHERE id = :id AND username = :username');
+        $delete->execute(['id' => $user['id'], 'username' => $username]);
+        invalidate_users_cache((string) $user['id']);
+
+        json_response([
+            'success' => true,
+            'deletedId' => $user['id'],
+            'username' => $username,
+        ]);
+    }
+
+    $fullName = trim((string) ($payload['fullName'] ?? ''));
+    $age = (int) ($payload['age'] ?? 0);
+    $bloodType = trim((string) ($payload['bloodType'] ?? ''));
+    $deviceId = trim((string) ($payload['deviceId'] ?? ''));
+
+    if ($fullName === '') {
+        json_response(['success' => false, 'message' => 'El nombre es obligatorio.'], 400);
+    }
+    if (strlen($password) < 8) {
+        json_response(['success' => false, 'message' => 'La contraseña debe tener al menos 8 caracteres.'], 400);
+    }
+    if ($age < 1 || $age > 120) {
+        json_response(['success' => false, 'message' => 'La edad debe estar entre 1 y 120.'], 400);
+    }
+    if ($bloodType === '') {
+        json_response(['success' => false, 'message' => 'El tipo de sangre es obligatorio.'], 400);
+    }
+    if ($deviceId === '') {
+        json_response(['success' => false, 'message' => 'El identificador del chaleco es obligatorio.'], 400);
+    }
+
+    $lookup = $pdo->prepare('SELECT id FROM users WHERE username = :username LIMIT 1');
+    $lookup->execute(['username' => $username]);
+    $existing = $lookup->fetch();
+    if ($existing) {
+        $payload['id'] = $existing['id'];
+    } elseif (trim((string) ($payload['id'] ?? '')) === '') {
+        $payload['id'] = sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            random_int(0, 0xffff),
+            random_int(0, 0xffff),
+            random_int(0, 0xffff),
+            random_int(0, 0x0fff) | 0x4000,
+            random_int(0, 0x3fff) | 0x8000,
+            random_int(0, 0xffff),
+            random_int(0, 0xffff),
+            random_int(0, 0xffff)
+        );
+    }
+
+    $payload['username'] = $username;
+    $payload['fullName'] = $fullName;
+    $payload['age'] = $age;
+    $payload['bloodType'] = $bloodType;
+    $payload['deviceId'] = $deviceId;
+    upsert_user($pdo, $payload);
+    invalidate_users_cache((string) $payload['id']);
+
+    $reload = $pdo->prepare(
+        'SELECT id, full_name, national_id, age, blood_type, address, emergency_phone,
+                emergency_contact, medical_observations, created_at, photo, username, device_id
+         FROM users WHERE id = :id LIMIT 1'
+    );
+    $reload->execute(['id' => $payload['id']]);
+    $row = $reload->fetch();
+
+    json_response([
+        'success' => true,
+        'user' => $row ? public_user_row($row) : null,
+    ]);
+}
+
 if ($action === 'import') {
     $users = $payload['users'] ?? null;
     if (!is_array($users)) {

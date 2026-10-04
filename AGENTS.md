@@ -100,6 +100,12 @@ If asked to run a single test, state clearly that no test runner is configured i
 - Passwords: `password_hash` / `password_verify`; `public_user_row()` strips password from API responses.
 - Optional secrets: `api/config.local.php` (from `config.local.php.example`, gitignored).
 
+## Demo data and privacy
+
+- The mobile client includes a laboratory flow. `register_lab` and `delete_lab` require a username with the `eva.lab.` prefix; use these only against a local test database.
+- User profiles include identity and health-related fields. Use values clearly marked `PRUEBA`/`LOCAL`, and do not expose real personal or clinical data in a class recording.
+- The mobile/API flow is a class prototype, not a production security boundary. Do not expose the local HTTP backend publicly or claim production-ready authentication/privacy.
+
 ## TypeScript Conventions
 
 - TypeScript strict mode is enabled in `tsconfig.json`.
@@ -160,8 +166,10 @@ If asked to run a single test, state clearly that no test runner is configured i
 
 - Default local DB connection is in `api/config.php`.
 - Current app database is `smartvest`.
-- Main tables are `users` and `iot_states`.
-- IoT data from the vest is stored in `iot_states`, not in a separate telemetry history table.
+- Main tables are `users`, `iot_states`, and `iot_history`.
+- The latest IoT state is stored in `iot_states`. Each accepted POST also inserts a telemetry point in `iot_history`; GET history uses `?history=1&limit=N`, clamps the limit to 10–120, and reads the `(device_id, recorded_at)` index.
+- `database.sql` inserts a starter row for `VEST-DEMO`. Treat it as a seed fixture, not evidence of a live sensor. A real-device demo must show a recent `last_update` and a new `iot_history` point after the device POSTs.
+- IoT GET responses use a 5-second cache-aside TTL and writes invalidate the matching state/history keys. History pruning is queued; do not claim it ran unless the worker processed the queue.
 
 - The current working firmware follows the older `.ino` pin choices for core peripherals.
 - Firmware config lives in `include/smartvest_config.h`.

@@ -24,7 +24,7 @@
 | [Plan SmartVest v2](docs/SMARTVEST-V2-PLAN.md) | Próxima generación: hardware, conectividad, checklist (documentado) |
 | [SmartVest v2 Ecuador](docs/SMARTVEST-V2-ECUADOR.md) | Precios, Claro/Movistar/CNT, WiFi + datos móviles + SMS |
 | [Guía para agentes IA](AGENTS.md) | Comandos y convenciones del repo |
-| [Cliente móvil (Expo)](mobile/README.md) | React Native + TypeScript; consulta `api/iot.php` |
+| [Aplicación Android](mobile/README.md) | APK SmartVest con la interfaz web completa y monitoreo del chaleco |
 | [Entorno de desarrollo móvil](docs/ENTORNO-MOVIL.md) | Versiones, doctor, destino físico, URL LAN |
 
 ---
@@ -52,7 +52,7 @@ open http://localhost/Smartvest/
 
 **IP para el chaleco:** `./scripts/print-lan-ip.sh` — usa esa URL en `smartvest_config.h`, no `localhost`.
 
-**Cliente móvil (Semana 9):** `cd mobile && npm install && npm start`. Destino de este Mac: celular físico + Expo Go. Ver [mobile/README.md](mobile/README.md).
+**Aplicación Android:** usa el APK `com.ajtecnology.smartvest` en el Redmi conectado. Abre la aplicación completa desde XAMPP; no uses Expo Go ni la app `SmartVest Demo`. Ver [mobile/README.md](mobile/README.md) y [la guía de exposición](docs/GUIA-EXPOSICION.md).
 
 ---
 
@@ -65,7 +65,7 @@ Smartvest/
 ├── services/                      # API cliente, IoT, toasts, almacenamiento
 ├── utils/                         # Validación, GPS, obstáculos, etc.
 ├── api/                           # Backend PHP (users, iot, address)
-├── mobile/                        # Cliente Expo / React Native + TypeScript
+├── mobile/                        # APK Android (React Native WebView) + TypeScript
 ├── database.sql                   # Esquema MariaDB
 ├── firmware/esp32/                # Código del chaleco (PlatformIO)
 ├── scripts/                       # deploy-xampp.sh, migración contraseñas

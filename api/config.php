@@ -2,19 +2,20 @@
 
 declare(strict_types=1);
 
-const DB_HOST = '127.0.0.1';
-const DB_PORT = '3306';
-const DB_NAME = 'smartvest';
-const DB_USER = 'root';
-const DB_PASSWORD = '';
-
-/** Clave por defecto solo para desarrollo local; sobrescribe en config.local.php */
-const SMARTVEST_IOT_API_KEY_DEFAULT = 'smartvest-local-dev-key';
-
 $localConfigPath = __DIR__ . '/config.local.php';
 if (is_file($localConfigPath)) {
     require $localConfigPath;
 }
+
+defined('DB_HOST') || define('DB_HOST', '127.0.0.1');
+defined('DB_PORT') || define('DB_PORT', '3306');
+defined('DB_NAME') || define('DB_NAME', 'smartvest');
+defined('DB_USER') || define('DB_USER', 'root');
+defined('DB_PASSWORD') || define('DB_PASSWORD', '');
+defined('DB_SOCKET') || define('DB_SOCKET', '');
+
+/** Clave por defecto solo para desarrollo local; sobrescribe en config.local.php */
+defined('SMARTVEST_IOT_API_KEY_DEFAULT') || define('SMARTVEST_IOT_API_KEY_DEFAULT', 'smartvest-local-dev-key');
 
 require_once __DIR__ . '/lib/cache_aside.php';
 require_once __DIR__ . '/lib/job_queue.php';
@@ -64,8 +65,11 @@ function get_pdo(): PDO
     }
 
     try {
+        $dsn = DB_SOCKET !== ''
+            ? 'mysql:unix_socket=' . DB_SOCKET . ';dbname=' . DB_NAME . ';charset=utf8mb4'
+            : 'mysql:host=' . DB_HOST . ';port=' . DB_PORT . ';dbname=' . DB_NAME . ';charset=utf8mb4';
         $pdo = new PDO(
-            'mysql:host=' . DB_HOST . ';port=' . DB_PORT . ';dbname=' . DB_NAME . ';charset=utf8mb4',
+            $dsn,
             DB_USER,
             DB_PASSWORD,
             [

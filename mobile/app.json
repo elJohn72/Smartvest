@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "plugins": [
       [
         "expo-build-properties",
@@ -18,6 +18,7 @@
     ],
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.ajtecnology.smartvest",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
@@ -25,8 +26,10 @@
       }
     },
     "android": {
+      "package": "com.ajtecnology.smartvest",
+      "versionCode": 24,
       "adaptiveIcon": {
-        "backgroundColor": "#0B1F33",
+        "backgroundColor": "#0f172a",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
