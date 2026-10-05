@@ -9,13 +9,18 @@ $pdo = get_pdo();
 
 function map_iot_row(array $row): array
 {
+    $timestampEpoch = $row['last_update_epoch'] ?? $row['recorded_at_epoch'] ?? null;
+    if ($timestampEpoch === null) {
+        $timestampEpoch = strtotime((string) ($row['last_update'] ?? $row['recorded_at'])) ?: 0;
+    }
+
     return [
         'deviceId' => $row['device_id'],
         'distanceCm' => $row['distance_cm'] !== null ? (float) $row['distance_cm'] : null,
         'latitude' => (float) $row['latitude'],
         'longitude' => (float) $row['longitude'],
         'sosActive' => (bool) $row['sos_active'],
-        'lastUpdate' => strtotime((string) ($row['last_update'] ?? $row['recorded_at'])) * 1000,
+        'lastUpdate' => (int) $timestampEpoch * 1000,
         'batteryLevel' => $row['battery_level'] !== null ? (int) $row['battery_level'] : null,
     ];
 }
@@ -62,7 +67,8 @@ if ($method === 'GET') {
 
         $points = cache_remember($cacheKey, SMARTVEST_CACHE_TTL_IOT, static function () use ($pdo, $deviceId, $limit) {
             $historyStatement = $pdo->prepare(
-                'SELECT device_id, distance_cm, latitude, longitude, sos_active, battery_level, recorded_at
+                'SELECT device_id, distance_cm, latitude, longitude, sos_active, battery_level, recorded_at,
+                    UNIX_TIMESTAMP(recorded_at) AS recorded_at_epoch
                 FROM iot_history
                 WHERE device_id = :device_id
                 ORDER BY recorded_at DESC
@@ -89,7 +95,12 @@ if ($method === 'GET') {
 
     $cacheKey = 'iot:state:' . $deviceId;
     $data = cache_remember($cacheKey, SMARTVEST_CACHE_TTL_IOT, static function () use ($pdo, $deviceId) {
-        $statement = $pdo->prepare('SELECT * FROM iot_states WHERE device_id = :device_id LIMIT 1');
+        $statement = $pdo->prepare(
+            'SELECT *, UNIX_TIMESTAMP(last_update) AS last_update_epoch
+            FROM iot_states
+            WHERE device_id = :device_id
+            LIMIT 1'
+        );
         $statement->execute(['device_id' => $deviceId]);
         $row = $statement->fetch();
 
