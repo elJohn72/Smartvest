@@ -13,6 +13,8 @@ paths:
   /health/live:
     get:
       summary: Liveness check
+      operationId: getHealthLive
+      security: []
       responses:
         '200':
           description: Servicio vivo
@@ -28,6 +30,8 @@ paths:
   /health/ready:
     get:
       summary: Readiness check (verifica base de datos)
+      operationId: getHealthReady
+      security: []
       responses:
         '200':
           description: Base de datos y migraciones listas
@@ -37,6 +41,8 @@ paths:
   /auth/register:
     post:
       summary: Registro controlado de laboratorio
+      operationId: registerAccount
+      security: []
       requestBody:
         required: true
         content:
@@ -55,12 +61,16 @@ paths:
       responses:
         '201':
           description: Cuenta de laboratorio creada
+        '400':
+          description: Datos inválidos
         '409':
           description: Usuario ya existe
 
   /auth/login:
     post:
       summary: Inicio de sesión cuidador
+      operationId: loginAccount
+      security: []
       requestBody:
         required: true
         content:
@@ -87,6 +97,7 @@ paths:
   /auth/logout:
     post:
       summary: Cierre de sesión y revocación de token
+      operationId: logoutAccount
       security:
         - BearerAuth: []
       responses:
@@ -98,6 +109,7 @@ paths:
   /me:
     get:
       summary: Obtener datos de la cuenta actual
+      operationId: getMe
       security:
         - BearerAuth: []
       responses:
@@ -108,12 +120,25 @@ paths:
               schema:
                 type: object
                 properties:
-                  id: { type: string, format: uuid }
+                  id: { type: string }
                   username: { type: string }
+        '401':
+          description: No autorizado
 
   /profiles:
+    get:
+      summary: Listar perfiles del cuidador autenticado
+      operationId: listProfiles
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de perfiles
+        '401':
+          description: No autorizado
     post:
       summary: Crear perfil de persona asistida
+      operationId: createProfile
       security:
         - BearerAuth: []
       requestBody:
@@ -131,10 +156,15 @@ paths:
       responses:
         '201':
           description: Perfil creado
+        '400':
+          description: Validación fallida
+        '401':
+          description: No autorizado
 
   /profiles/{id}:
     get:
       summary: Obtener perfil por ID
+      operationId: getProfileById
       security:
         - BearerAuth: []
       parameters:
@@ -145,10 +175,13 @@ paths:
       responses:
         '200':
           description: Detalle del perfil
+        '401':
+          description: No autorizado
         '404':
           description: Perfil no encontrado o ajeno
     patch:
       summary: Actualizar perfil propio
+      operationId: updateProfile
       security:
         - BearerAuth: []
       parameters:
@@ -170,10 +203,13 @@ paths:
       responses:
         '200':
           description: Perfil actualizado
+        '401':
+          description: No autorizado
         '404':
           description: Perfil no encontrado
     delete:
       summary: Eliminar perfil propio
+      operationId: deleteProfile
       security:
         - BearerAuth: []
       parameters:
@@ -184,10 +220,15 @@ paths:
       responses:
         '204':
           description: Perfil eliminado y chaleco desvinculado
+        '401':
+          description: No autorizado
+        '404':
+          description: Perfil no encontrado
 
   /profiles/{id}/device:
     post:
       summary: Vincular chaleco a perfil con código de un solo uso
+      operationId: pairProfileDevice
       security:
         - BearerAuth: []
       parameters:
@@ -210,12 +251,15 @@ paths:
           description: Chaleco vinculado
         '400':
           description: Código inválido o expirado
+        '401':
+          description: No autorizado
         '409':
           description: Chaleco ya asignado
 
   /profiles/{id}/shares:
     post:
       summary: Generar enlace / token QR consentido
+      operationId: createProfileShare
       security:
         - BearerAuth: []
       parameters:
@@ -247,10 +291,15 @@ paths:
                   shareId: { type: string }
                   token: { type: string }
                   publicUrl: { type: string }
+        '401':
+          description: No autorizado
+        '404':
+          description: Perfil no encontrado
 
   /profiles/{id}/shares/{shareId}:
     delete:
       summary: Revocar token QR
+      operationId: revokeProfileShare
       security:
         - BearerAuth: []
       parameters:
@@ -265,10 +314,16 @@ paths:
       responses:
         '204':
           description: QR revocado
+        '401':
+          description: No autorizado
+        '404':
+          description: Share o perfil no encontrado
 
   /public/emergency/{token}:
     get:
       summary: Datos mínimos de emergencia para lector de QR
+      operationId: getPublicEmergencyData
+      security: []
       parameters:
         - name: token
           in: path
@@ -283,6 +338,8 @@ paths:
   /emergency/{token}:
     get:
       summary: Página HTML accesible de emergencia
+      operationId: getEmergencyHtmlPage
+      security: []
       parameters:
         - name: token
           in: path
@@ -300,6 +357,7 @@ paths:
   /devices/{deviceId}/state:
     get:
       summary: Estado actual de telemetría del chaleco
+      operationId: getDeviceTelemetryState
       security:
         - BearerAuth: []
       parameters:
@@ -316,21 +374,33 @@ paths:
                 type: object
                 properties:
                   data:
-                    type: object
-                    nullable: true
-                    properties:
-                      deviceId: { type: string }
-                      distanceCm: { type: number, nullable: true }
-                      gpsFix: { type: boolean }
-                      latitude: { type: number, nullable: true }
-                      longitude: { type: number, nullable: true }
-                      batteryLevel: { type: integer, nullable: true }
-                      sosActive: { type: boolean }
-                      lastUpdate: { type: integer }
+                    anyOf:
+                      - type: "null"
+                      - type: object
+                        properties:
+                          deviceId: { type: string }
+                          distanceCm:
+                            type: [number, "null"]
+                          gpsFix: { type: boolean }
+                          latitude:
+                            type: [number, "null"]
+                          longitude:
+                            type: [number, "null"]
+                          batteryLevel:
+                            type: [integer, "null"]
+                          sosActive: { type: boolean }
+                          lastUpdate: { type: integer }
+                          bootId: { type: string }
+                          sequence: { type: integer }
+        '401':
+          description: No autorizado
+        '404':
+          description: Dispositivo no encontrado o no autorizado
 
   /devices/{deviceId}/history:
     get:
       summary: Historial de telemetría
+      operationId: getDeviceTelemetryHistory
       security:
         - BearerAuth: []
       parameters:
@@ -344,10 +414,15 @@ paths:
       responses:
         '200':
           description: Lista de lecturas históricas
+        '401':
+          description: No autorizado
+        '404':
+          description: Dispositivo no encontrado o no autorizado
 
   /devices/{deviceId}/telemetry:
     post:
       summary: Ingestión de telemetría física desde ESP32
+      operationId: ingestDeviceTelemetry
       security:
         - DeviceApiKey: []
       parameters:
@@ -364,24 +439,29 @@ paths:
               required: [deviceId, bootId, sequence, sosActive]
               properties:
                 deviceId: { type: string }
-                bootId: { type: string, format: uuid }
+                bootId: { type: string }
                 sequence: { type: integer, minimum: 0 }
-                distanceCm: { type: number, nullable: true }
+                distanceCm:
+                  type: [number, "null"]
                 gpsFix: { type: boolean }
-                latitude: { type: number, nullable: true }
-                longitude: { type: number, nullable: true }
-                batteryLevel: { type: integer, nullable: true }
+                latitude:
+                  type: [number, "null"]
+                longitude:
+                  type: [number, "null"]
+                batteryLevel:
+                  type: [integer, "null"]
                 sosActive: { type: boolean }
-                sosEventId: { type: string, format: uuid, nullable: true }
+                sosEventId:
+                  type: [string, "null"]
       responses:
         '202':
           description: Telemetría persistida
         '200':
           description: Telemetría duplicada o descartada
-        '401':
-          description: Credencial de dispositivo incorrecta
         '400':
           description: Payload inválido
+        '401':
+          description: Credencial de dispositivo incorrecta
 
 components:
   securitySchemes:

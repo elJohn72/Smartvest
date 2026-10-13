@@ -20,17 +20,55 @@ jobs:
         run: ./scripts/ci/check-secrets.sh
 
       - name: Check Git Diff Check
-        run: git diff --check origin/main..HEAD || true
+        run: git diff --check origin/main..HEAD
 
   contracts_and_api:
-    name: OpenAPI Contract & API Tests
+    name: OpenAPI Contract & MariaDB API Integration Tests
     runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: smartvest_root_secret
+          MARIADB_DATABASE: smartvest
+          MARIADB_USER: smartvest_user
+          MARIADB_PASSWORD: smartvest_lab_password
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=5s --health-timeout=3s --health-retries=10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Validate OpenAPI Contract
         run: ./scripts/ci/check-contracts.sh
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql
+
+      - name: Execute Database Migrations
+        env:
+          MYSQL_PWD: smartvest_lab_password
+        run: |
+          mariadb -h 127.0.0.1 -u smartvest_user smartvest < api/migrations/001_native.sql
+          mariadb -h 127.0.0.1 -u smartvest_user smartvest < tests/fixtures/PRUEBA/seed.sql
+
+      - name: Run PHP Integration & Authorization Tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: smartvest
+          DB_USER: smartvest_user
+          DB_PASSWORD: smartvest_lab_password
+        run: php tests/api_integration_test.php
 
   android_build:
     name: Android Native Compose Build & Unit Tests
@@ -53,6 +91,14 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleDebug assembleRelease --no-daemon
+
+      - name: Upload Debug & Release APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartvest-android-apk
+          path: |
+            android-native/app/build/outputs/apk/debug/app-debug.apk
+            android-native/app/build/outputs/apk/release/app-release.apk
 
   firmware_build:
     name: ESP32 Firmware Build Check

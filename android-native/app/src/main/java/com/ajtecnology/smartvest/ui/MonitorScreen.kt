@@ -1,12 +1,13 @@
 package com.ajtecnology.smartvest.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -16,153 +17,463 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ajtecnology.smartvest.R
+import com.ajtecnology.smartvest.data.ProfileDto
 import com.ajtecnology.smartvest.theme.*
 
 @Composable
 fun MonitorScreen(
-    viewModel: MonitorViewModel,
+    viewModel: MainViewModel,
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.monitorState.collectAsState()
+    val profiles by viewModel.profiles.collectAsState()
+    val selectedProfile by viewModel.selectedProfile.collectAsState()
+    val history by viewModel.history.collectAsState()
+    val qrShareData by viewModel.qrShareData.collectAsState()
 
-    Column(
+    var showCreateProfileDialog by remember { mutableStateOf(false) }
+    var showPairDialog by remember { mutableStateOf(false) }
+    var showQrDialog by remember { mutableStateOf(false) }
+
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(Paper)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.app_name),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Night
-            )
-            Button(
-                onClick = onLogoutClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Night)
+        item {
+            // Cabecera principal
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(stringResource(R.string.logout_button))
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        when (val s = state) {
-            is MonitorUiState.Loading -> {
-                CircularProgressIndicator(color = Signal)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(stringResource(R.string.status_loading), color = MetaText)
-            }
-            is MonitorUiState.NoData -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Inset)
+                Text(
+                    text = stringResource(R.string.app_name),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Night
+                )
+                Button(
+                    onClick = onLogoutClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Night)
                 ) {
-                    Text(
-                        text = stringResource(R.string.status_no_data),
-                        modifier = Modifier.padding(24.dp),
-                        color = BodyText
-                    )
+                    Text(stringResource(R.string.logout_button))
                 }
             }
-            is MonitorUiState.NoConnection -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WarnSoft)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Selector de Perfiles del Cuidador
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CardBg)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = stringResource(R.string.status_no_connection),
+                            text = "Persona Asistida",
                             fontWeight = FontWeight.Bold,
-                            color = WarnOrange
+                            fontSize = 16.sp,
+                            color = Night
                         )
-                        Text(text = s.message, color = BodyText, fontSize = 12.sp)
+                        TextButton(onClick = { showCreateProfileDialog = true }) {
+                            Text("+ Nuevo Perfil", color = Signal)
+                        }
+                    }
+
+                    if (profiles.isEmpty()) {
+                        Text(
+                            text = "No hay perfiles creados. Pulsa '+ Nuevo Perfil' para comenzar.",
+                            color = MetaText,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            profiles.forEach { p ->
+                                val isSelected = p.id == selectedProfile?.id
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { viewModel.selectProfile(p) },
+                                    label = { Text(p.presentationName) }
+                                )
+                            }
+                        }
+                    }
+
+                    // Información del chaleco asignado al perfil
+                    selectedProfile?.let { p ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Chaleco: ${p.deviceId ?: "No vinculado"}",
+                                color = if (p.deviceId != null) ClearGreen else WarnOrange,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Row {
+                                if (p.deviceId == null) {
+                                    OutlinedButton(onClick = { showPairDialog = true }) {
+                                        Text("Vincular", fontSize = 12.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        viewModel.generateQrShare(p.id)
+                                        showQrDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Signal)
+                                ) {
+                                    Text("QR Emergencia", fontSize = 12.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }
-            is MonitorUiState.Ready -> {
-                val r = s.reading
 
-                // Banner de Alerta SOS
-                if (r.sosActive) {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Estado del Monitoreo
+        item {
+            when (val s = state) {
+                is MonitorUiState.Loading -> {
+                    CircularProgressIndicator(color = Signal)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(stringResource(R.string.status_loading), color = MetaText)
+                }
+                is MonitorUiState.SessionExpired -> {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = SosSoft)
                     ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Sesión Expirada", fontWeight = FontWeight.Bold, color = SosRed)
+                            Text("Tu sesión ha expirado por seguridad. Por favor vuelve a iniciar sesión.", color = BodyText, fontSize = 13.sp)
+                        }
+                    }
+                }
+                is MonitorUiState.NoData -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Inset)
+                    ) {
                         Text(
-                            text = stringResource(R.string.sos_active_alert),
-                            color = SosRed,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            modifier = Modifier.padding(16.dp)
+                            text = if (selectedProfile?.deviceId == null) "Vincula un chaleco al perfil para recibir telemetría." else stringResource(R.string.status_no_data),
+                            modifier = Modifier.padding(24.dp),
+                            color = BodyText
                         )
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
-
-                // Banner de datos desactualizados
-                if (s.isStale) {
-                    Text(
-                        text = stringResource(R.string.status_stale),
-                        color = CautionYellow,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                is MonitorUiState.NoConnection -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = WarnSoft)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = stringResource(R.string.status_no_connection),
+                                fontWeight = FontWeight.Bold,
+                                color = WarnOrange
+                            )
+                            Text(text = s.message, color = BodyText, fontSize = 12.sp)
+                        }
+                    }
                 }
+                is MonitorUiState.Ready -> {
+                    val r = s.reading
 
-                // Tarjeta Principal de Distancia
+                    // Banner SOS
+                    if (r.sosActive) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = SosSoft)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.sos_active_alert),
+                                color = SosRed,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // Banner Stale
+                    if (s.isStale) {
+                        Text(
+                            text = stringResource(R.string.status_stale),
+                            color = CautionYellow,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    // Lectura Principal
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp)),
+                        colors = CardDefaults.cardColors(containerColor = CardBg)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            val dist = r.distanceCm
+                            if (dist != null) {
+                                Text(
+                                    text = "${dist.toInt()}",
+                                    fontSize = 64.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (dist <= 40) SosRed else if (dist <= 100) WarnOrange else ClearGreen
+                                )
+                                Text(
+                                    text = stringResource(R.string.distance_unit),
+                                    fontSize = 16.sp,
+                                    color = MetaText
+                                )
+                            } else {
+                                Text("Sin lectura de distancia", color = MetaText)
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround
+                            ) {
+                                Text(
+                                    text = "${stringResource(R.string.battery_label)} ${r.batteryLevel ?: "--"}%",
+                                    color = BodyText
+                                )
+                                Text(
+                                    text = if (r.gpsFix) stringResource(R.string.gps_fix) else stringResource(R.string.gps_no_fix),
+                                    color = if (r.gpsFix) ClearGreen else MetaText
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Historial de Telemetría
+        if (history.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Historial Reciente",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Night,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
+            }
+            items(history) { item ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp)),
+                        .padding(vertical = 4.dp),
                     colors = CardDefaults.cardColors(containerColor = CardBg)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val dist = r.distanceCm
-                        if (dist != null) {
+                        Column {
                             Text(
-                                text = "${dist.toInt()}",
-                                fontSize = 64.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (dist <= 40) SosRed else if (dist <= 100) WarnOrange else ClearGreen
+                                text = "Distancia: ${item.distanceCm?.toInt() ?: "--"} cm",
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (item.sosActive) SosRed else BodyText
                             )
-                            Text(
-                                text = stringResource(R.string.distance_unit),
-                                fontSize = 16.sp,
-                                color = MetaText
-                            )
-                        } else {
-                            Text("Sin lectura de sensor", color = MetaText)
+                            Text(text = item.recordedAt, fontSize = 11.sp, color = MetaText)
                         }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            Text(
-                                text = "${stringResource(R.string.battery_label)} ${r.batteryLevel ?: "--"}%",
-                                color = BodyText
-                            )
-                            Text(
-                                text = if (r.gpsFix) stringResource(R.string.gps_fix) else stringResource(R.string.gps_no_fix),
-                                color = if (r.gpsFix) ClearGreen else MetaText
-                            )
+                        if (item.sosActive) {
+                            Text("SOS", color = SosRed, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     }
                 }
             }
         }
+    }
+
+    // Modal Crear Perfil
+    if (showCreateProfileDialog) {
+        var name by remember { mutableStateOf("") }
+        var phone by remember { mutableStateOf("") }
+        var blood by remember { mutableStateOf("") }
+        var obs by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showCreateProfileDialog = false },
+            title = { Text("Crear Perfil Asistido") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nombre (obligatorio)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text("Teléfono de emergencia") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = blood,
+                        onValueChange = { blood = it },
+                        label = { Text("Grupo sanguíneo (ej: O+)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = obs,
+                        onValueChange = { obs = it },
+                        label = { Text("Observaciones médicas") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (name.isNotBlank()) {
+                            viewModel.createProfile(name.trim(), phone.trim(), blood.trim(), obs.trim()) {
+                                showCreateProfileDialog = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateProfileDialog = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // Modal Vincular Chaleco
+    if (showPairDialog) {
+        var pairingCode by remember { mutableStateOf("") }
+        var isPairing by remember { mutableStateOf(false) }
+        var pairError by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showPairDialog = false },
+            title = { Text("Vincular Chaleco") },
+            text = {
+                Column {
+                    Text("Introduce el código de vinculación de un solo uso generado en el chaleco o taller:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = pairingCode,
+                        onValueChange = { pairingCode = it },
+                        label = { Text("Código de emparejamiento") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (pairError != null) {
+                        Text(pairError!!, color = SosRed, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isPairing = true
+                        pairError = null
+                        viewModel.pairDevice(pairingCode.trim()) { success ->
+                            isPairing = false
+                            if (success) {
+                                showPairDialog = false
+                            } else {
+                                pairError = "Código inválido o ya utilizado."
+                            }
+                        }
+                    },
+                    enabled = !isPairing && pairingCode.isNotBlank()
+                ) {
+                    Text(if (isPairing) "Vinculando..." else "Confirmar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPairDialog = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // Modal QR Consentido / URL de Emergencia
+    if (showQrDialog) {
+        AlertDialog(
+            onDismissRequest = { showQrDialog = false },
+            title = { Text("Código QR Consentido") },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "El lector o rescatista puede acceder a los datos médicos consentidos sin necesidad de instalar la aplicación.",
+                        fontSize = 13.sp,
+                        color = BodyText
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    qrShareData?.let { share ->
+                        Text(
+                            text = "URL Pública:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = share.publicUrl,
+                            fontSize = 11.sp,
+                            color = Signal,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                selectedProfile?.let { p ->
+                                    viewModel.revokeQrShare(p.id, share.shareId)
+                                    showQrDialog = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SosRed)
+                        ) {
+                            Text("Revocar Acceso QR")
+                        }
+                    } ?: CircularProgressIndicator(color = Signal)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showQrDialog = false }) { Text("Cerrar") }
+            }
+        )
     }
 }

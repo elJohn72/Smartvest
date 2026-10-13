@@ -3,6 +3,19 @@ package com.ajtecnology.smartvest.data
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class RegisterRequest(
+    val username: String,
+    val password: String
+)
+
+@Serializable
+data class RegisterResponse(
+    val success: Boolean,
+    val id: String,
+    val username: String
+)
+
+@Serializable
 data class LoginRequest(
     val username: String,
     val password: String
@@ -12,6 +25,35 @@ data class LoginRequest(
 data class LoginResponse(
     val token: String,
     val expiresAt: String
+)
+
+@Serializable
+data class ProfileDto(
+    val id: String,
+    val presentationName: String,
+    val emergencyPhone: String? = null,
+    val bloodType: String? = null,
+    val medicalObservations: String? = null,
+    val deviceId: String? = null
+)
+
+@Serializable
+data class ProfileListResponse(
+    val data: List<ProfileDto>
+)
+
+@Serializable
+data class ProfileCreateRequest(
+    val presentationName: String,
+    val emergencyPhone: String? = null,
+    val bloodType: String? = null,
+    val medicalObservations: String? = null
+)
+
+@Serializable
+data class ProfileCreateResponse(
+    val id: String,
+    val presentationName: String
 )
 
 @Serializable
@@ -31,6 +73,24 @@ data class TelemetryReading(
 @Serializable
 data class TelemetryStateResponse(
     val data: TelemetryReading? = null
+)
+
+@Serializable
+data class TelemetryHistoryItem(
+    val id: Long,
+    val deviceId: String,
+    val distanceCm: Float? = null,
+    val gpsFix: Boolean = false,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val batteryLevel: Int? = null,
+    val sosActive: Boolean = false,
+    val recordedAt: String
+)
+
+@Serializable
+data class TelemetryHistoryResponse(
+    val data: List<TelemetryHistoryItem>
 )
 
 @Serializable

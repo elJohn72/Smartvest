@@ -25,8 +25,11 @@ class Authorization
 
         if (!$profile) {
             http_response_code(404);
-            echo json_encode(['error' => ['code' => 'NOT_FOUND', 'message' => 'Perfil no encontrado o no pertenece a esta cuenta.']]);
-            exit;
+            if (!defined('SMARTVEST_TEST_MODE')) {
+                echo json_encode(['error' => ['code' => 'NOT_FOUND', 'message' => 'Perfil no encontrado o no pertenece a esta cuenta.']]);
+                exit;
+            }
+            throw new \RuntimeException('Perfil no encontrado o no pertenece a esta cuenta.');
         }
 
         return $profile;
@@ -43,8 +46,11 @@ class Authorization
 
         if (!$profile) {
             http_response_code(404);
-            echo json_encode(['error' => ['code' => 'NOT_FOUND', 'message' => 'Dispositivo no vinculado a un perfil propio.']]);
-            exit;
+            if (!defined('SMARTVEST_TEST_MODE')) {
+                echo json_encode(['error' => ['code' => 'NOT_FOUND', 'message' => 'Dispositivo no vinculado a un perfil propio.']]);
+                exit;
+            }
+            throw new \RuntimeException('Dispositivo no vinculado a un perfil propio.');
         }
 
         return $profile;

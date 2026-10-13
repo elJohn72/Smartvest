@@ -94,6 +94,11 @@ bool sosPressed = false;
 bool sosEdgeLatched = false;
 int batteryLevel = -1;
 
+// Identificadores de secuencia monotónica y arranque (Contrato v1)
+char bootId[37] = {0};
+unsigned long telemetrySequence = 0;
+char currentSosEventId[37] = {0};
+
 AlertPattern currentPattern;
 unsigned long patternStartedAt = 0;
 unsigned long lastDistanceReadMs = 0;
@@ -159,10 +164,30 @@ void setup() {
     sendAtCommand("AT+CMGF=1", "OK", 2000);
   }
 
+  // Generar bootId criptográfico único para este ciclo de encendido (UUID v4 format)
+  uint8_t randBytes[16];
+  for (int i = 0; i < 16; i += 4) {
+    uint32_t r = esp_random();
+    memcpy(&randBytes[i], &r, 4);
+  }
+  randBytes[6] = (randBytes[6] & 0x0F) | 0x40; // Versión 4
+  randBytes[8] = (randBytes[8] & 0x3F) | 0x80; // Variante RFC 4122
+  snprintf(bootId, sizeof(bootId),
+           "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+           randBytes[0], randBytes[1], randBytes[2], randBytes[3],
+           randBytes[4], randBytes[5], randBytes[6], randBytes[7],
+           randBytes[8], randBytes[9], randBytes[10], randBytes[11],
+           randBytes[12], randBytes[13], randBytes[14], randBytes[15]);
+
+  // Sincronización SNTP para validación criptográfica de certificados HTTPS
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+
   Serial.println();
-  Serial.println("SmartVest PlatformIO iniciado");
+  Serial.println("SmartVest PlatformIO iniciado (Contrato v1)");
   Serial.print("deviceId=");
   Serial.println(SMARTVEST_DEVICE_ID);
+  Serial.print("bootId=");
+  Serial.println(bootId);
 }
 
 void loop() {
@@ -444,6 +469,27 @@ void publishTelemetryToApi() {
     return;
   }
 
+  telemetrySequence++;
+
+  // Generar o limpiar sosEventId si SOS está activo
+  if (sosPressed && strlen(currentSosEventId) == 0) {
+    uint8_t randBytes[16];
+    for (int i = 0; i < 16; i += 4) {
+      uint32_t r = esp_random();
+      memcpy(&randBytes[i], &r, 4);
+    }
+    randBytes[6] = (randBytes[6] & 0x0F) | 0x40;
+    randBytes[8] = (randBytes[8] & 0x3F) | 0x80;
+    snprintf(currentSosEventId, sizeof(currentSosEventId),
+             "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+             randBytes[0], randBytes[1], randBytes[2], randBytes[3],
+             randBytes[4], randBytes[5], randBytes[6], randBytes[7],
+             randBytes[8], randBytes[9], randBytes[10], randBytes[11],
+             randBytes[12], randBytes[13], randBytes[14], randBytes[15]);
+  } else if (!sosPressed) {
+    currentSosEventId[0] = '\0';
+  }
+
   HTTPClient http;
   http.begin(SMARTVEST_API_URL);
   http.addHeader("Content-Type", "application/json");
@@ -451,21 +497,20 @@ void publishTelemetryToApi() {
 
   String payload = String("{") +
                    "\"deviceId\":\"" + SMARTVEST_DEVICE_ID + "\"," +
-                   "\"distanceCm\":" + String(currentDistanceCm, 1) + "," +
-                   "\"latitude\":" + String(gpsState.fix ? gpsState.latitude : 0.0, 6) + "," +
-                   "\"longitude\":" + String(gpsState.fix ? gpsState.longitude : 0.0, 6) + "," +
-                   "\"sosActive\":" + String(sosPressed ? "true" : "false");
-
-  if (batteryLevel >= 0) {
-    payload += ",\"batteryLevel\":" + String(batteryLevel);
-  }
-
-  payload += "}";
+                   "\"bootId\":\"" + String(bootId) + "\"," +
+                   "\"sequence\":" + String(telemetrySequence) + "," +
+                   "\"distanceCm\":" + (currentDistanceCm < 9000.0f ? String(currentDistanceCm, 1) : "null") + "," +
+                   "\"gpsFix\":" + (gpsState.fix ? "true" : "false") + "," +
+                   "\"latitude\":" + (gpsState.fix ? String(gpsState.latitude, 6) : "null") + "," +
+                   "\"longitude\":" + (gpsState.fix ? String(gpsState.longitude, 6) : "null") + "," +
+                   "\"batteryLevel\":" + (batteryLevel >= 0 ? String(batteryLevel) : "null") + "," +
+                   "\"sosActive\":" + (sosPressed ? "true" : "false") + "," +
+                   "\"sosEventId\":" + (strlen(currentSosEventId) > 0 ? ("\"" + String(currentSosEventId) + "\"") : "null") +
+                   "}";
 
   const int responseCode = http.POST(payload);
   if (responseCode > 0) {
-    Serial.print("HTTP iot.php -> ");
-    Serial.println(responseCode);
+    Serial.printf("HTTP v1 telemetry [%lu] -> %d\n", telemetrySequence, responseCode);
   } else {
     Serial.print("HTTP error -> ");
     Serial.println(http.errorToString(responseCode));
