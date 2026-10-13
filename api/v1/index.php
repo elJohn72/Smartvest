@@ -482,8 +482,9 @@ if (preg_match('#^profiles/([^/]+)/shares/([^/]+)$#', $path, $m) && $method === 
 // ==============================================================================
 // 7. INGESTIÓN DE TELEMETRÍA FÍSICA TRANSACCIONAL Y MONOTÓNICA
 // ==============================================================================
-if (preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) && $method === 'POST') {
-    $deviceId = $m[1];
+if ((preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) || $path === 'telemetry') && $method === 'POST') {
+    $data = read_json_body();
+    $deviceId = isset($m[1]) ? $m[1] : trim((string)($data['deviceId'] ?? ''));
     $apiKey = $_SERVER['HTTP_X_SMARTVEST_API_KEY'] ?? '';
 
     // Validar credencial del dispositivo
@@ -497,7 +498,6 @@ if (preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) && $method === 'POST'
         exit;
     }
 
-    $data = read_json_body();
     $bootId = trim((string)($data['bootId'] ?? ''));
     $seq = isset($data['sequence']) ? (int)$data['sequence'] : -1;
     $sos = !empty($data['sosActive']);
