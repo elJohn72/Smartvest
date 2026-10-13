@@ -120,11 +120,16 @@ class MainViewModel(
         }
     }
 
-    fun pairDevice(pairingCode: String, onComplete: (Boolean) -> Unit) {
+    fun pairDevice(deviceId: String, pairingCode: String, onComplete: (Boolean) -> Unit) {
         val current = _selectedProfile.value ?: return
-        val deviceId = current.deviceId ?: "VEST-001" // O el ID introducido
+        val trimmedDevice = deviceId.trim()
+        val trimmedCode = pairingCode.trim()
+        if (trimmedDevice.isEmpty() || trimmedCode.isEmpty()) {
+            onComplete(false)
+            return
+        }
         viewModelScope.launch {
-            apiClient.pairDevice(current.id, deviceId, pairingCode).fold(
+            apiClient.pairDevice(current.id, trimmedDevice, trimmedCode).fold(
                 onSuccess = { success ->
                     if (success) loadProfiles()
                     onComplete(success)
@@ -134,9 +139,9 @@ class MainViewModel(
         }
     }
 
-    fun generateQrShare(profileId: String) {
+    fun generateQrShare(profileId: String, allowedFields: List<String> = listOf("presentationName", "emergencyPhone", "bloodType")) {
         viewModelScope.launch {
-            apiClient.createQrShare(profileId, listOf("presentationName", "emergencyPhone", "bloodType")).fold(
+            apiClient.createQrShare(profileId, allowedFields).fold(
                 onSuccess = { _qrShareData.value = it },
                 onFailure = { /* Log o manejar error */ }
             )

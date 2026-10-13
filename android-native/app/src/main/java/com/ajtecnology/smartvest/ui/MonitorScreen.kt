@@ -382,8 +382,9 @@ fun MonitorScreen(
         )
     }
 
-    // Modal Vincular Chaleco
+    // Modal Vincular Chaleco (Requiere Device ID real y código de un solo uso)
     if (showPairDialog) {
+        var inputDeviceId by remember { mutableStateOf(selectedProfile?.deviceId ?: "") }
         var pairingCode by remember { mutableStateOf("") }
         var isPairing by remember { mutableStateOf(false) }
         var pairError by remember { mutableStateOf<String?>(null) }
@@ -393,16 +394,29 @@ fun MonitorScreen(
             title = { Text("Vincular Chaleco") },
             text = {
                 Column {
-                    Text("Introduce el código de vinculación de un solo uso generado en el chaleco o taller:")
+                    Text(
+                        text = "Introduce el identificador del chaleco y el código de emparejamiento temporal generado en el dispositivo:",
+                        fontSize = 13.sp,
+                        color = BodyText
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = inputDeviceId,
+                        onValueChange = { inputDeviceId = it },
+                        label = { Text("ID del Dispositivo (ej. VEST-LAB-01)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = pairingCode,
                         onValueChange = { pairingCode = it },
-                        label = { Text("Código de emparejamiento") },
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text("Código de emparejamiento (OTP)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
                     if (pairError != null) {
-                        Text(pairError!!, color = SosRed, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                        Text(pairError!!, color = SosRed, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
             },
@@ -411,16 +425,16 @@ fun MonitorScreen(
                     onClick = {
                         isPairing = true
                         pairError = null
-                        viewModel.pairDevice(pairingCode.trim()) { success ->
+                        viewModel.pairDevice(inputDeviceId.trim(), pairingCode.trim()) { success ->
                             isPairing = false
                             if (success) {
                                 showPairDialog = false
                             } else {
-                                pairError = "Código inválido o ya utilizado."
+                                pairError = "Identificador o código inválido, expirado o ya vinculado."
                             }
                         }
                     },
-                    enabled = !isPairing && pairingCode.isNotBlank()
+                    enabled = !isPairing && inputDeviceId.isNotBlank() && pairingCode.isNotBlank()
                 ) {
                     Text(if (isPairing) "Vinculando..." else "Confirmar")
                 }
@@ -431,30 +445,94 @@ fun MonitorScreen(
         )
     }
 
-    // Modal QR Consentido / URL de Emergencia
+    // Modal QR Consentido / URL de Emergencia con selección de campos y renderizado QR local
     if (showQrDialog) {
+        var consentName by remember { mutableStateOf(true) }
+        var consentPhone by remember { mutableStateOf(true) }
+        var consentBlood by remember { mutableStateOf(true) }
+
         AlertDialog(
             onDismissRequest = { showQrDialog = false },
             title = { Text("Código QR Consentido") },
             text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
-                        text = "El lector o rescatista puede acceder a los datos médicos consentidos sin necesidad de instalar la aplicación.",
-                        fontSize = 13.sp,
+                        text = "Selecciona los datos públicos consentidos para el rescatista o médico. La URL es opaca y no incluye datos en texto plano dentro del código QR.",
+                        fontSize = 12.sp,
                         color = BodyText
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Checkboxes de consentimiento granular
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(checked = consentName, onCheckedChange = { consentName = it })
+                        Text("Nombre del asistido", fontSize = 13.sp)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(checked = consentPhone, onCheckedChange = { consentPhone = it })
+                        Text("Teléfono de emergencia", fontSize = 13.sp)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(checked = consentBlood, onCheckedChange = { consentBlood = it })
+                        Text("Tipo de sangre", fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            selectedProfile?.let { p ->
+                                val fields = mutableListOf<String>()
+                                if (consentName) fields.add("presentationName")
+                                if (consentPhone) fields.add("emergencyPhone")
+                                if (consentBlood) fields.add("bloodType")
+                                viewModel.generateQrShare(p.id, fields)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Signal)
+                    ) {
+                        Text("Generar / Actualizar QR", fontSize = 12.sp)
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
+
                     qrShareData?.let { share ->
-                        Text(
-                            text = "URL Pública:",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
+                        val qrBitmap = remember(share.publicUrl) {
+                            QrCodeGenerator.generateQrBitmap(share.publicUrl, 400)
+                        }
+
+                        if (qrBitmap != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = qrBitmap,
+                                contentDescription = "Código QR de Emergencia Escaneable",
+                                modifier = Modifier
+                                    .size(180.dp)
+                                    .padding(8.dp)
+                                    .background(Color.White, RoundedCornerShape(8.dp))
+                                    .padding(8.dp)
+                            )
+                        } else {
+                            Text("No se pudo generar la imagen del código QR.", color = SosRed, fontSize = 12.sp)
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = share.publicUrl,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             color = Signal,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 4.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
@@ -466,9 +544,9 @@ fun MonitorScreen(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = SosRed)
                         ) {
-                            Text("Revocar Acceso QR")
+                            Text("Revocar Acceso QR", fontSize = 12.sp)
                         }
-                    } ?: CircularProgressIndicator(color = Signal)
+                    }
                 }
             },
             confirmButton = {

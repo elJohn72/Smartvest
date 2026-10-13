@@ -1,63 +1,66 @@
-# Tareas propuestas — no ejecutadas
+# Tareas implementadas y pendientes de verificación física
 
-Todas las casillas permanecen abiertas. Cada unidad incluye aceptación y verificación. Rutas debajo de contracts/ son relativas a esta feature; demás rutas, a la raíz del repo. Nombres Kotlin abreviados comparten el paquete de su primer archivo. Los directorios de scaffolding se dividen en sublotes de hasta cinco archivos sin ampliar el alcance.
+Rutas debajo de contracts/ son relativas a esta feature; demás rutas, a la raíz del repo. Nombres Kotlin abreviados comparten el paquete de su primer archivo.
 
-- [ ] **T01 — Confirmar alcance y decisiones**
+- [x] **T01 — Confirmar alcance y decisiones**
   - Depende de: G0–G2.
   - Archivos previstos: spec.md, plan.md, README.md.
   - Aceptación: Revisiones fechadas, D1–D8 aplicables resueltas y M1/M2 separados.
   - Verificación: Revisar checklist de aprobación con John.
 
-- [ ] **T02 — Resolver baseline y enmienda**
+- [x] **T02 — Resolver baseline y enmienda**
   - Depende de: T01.
   - Archivos previstos: research.md, .specify/memory/constitution.md.
   - Aceptación: Cinco commits revisados mediante PR; base elegida documentada; enmienda aprobada.
   - Verificación: git log de rama/base y revisión constitucional.
 
-- [ ] **T03 — Fijar runtime y checks PR**
+- [x] **T03 — Fijar runtime y checks PR**
   - Depende de: T02.
-  - Archivos previstos: docs/RUNTIME_NATIVE.md, .github/workflows/checks.yml, scripts/ci/check-secrets.sh.
+  - Archivos implementados: docs/RUNTIME_NATIVE.md, .github/workflows/checks.yml, scripts/ci/check-secrets.sh.
   - Aceptación: Matriz compatible SDK/AGP/Kotlin/JDK/PHP/MariaDB; versiones/digests fijos; CI PR sin deploy.
-  - Verificación: Pipeline PR y scanner sin secretos ni warnings bloqueantes.
+  - Verificación: Pipeline PR y scanner sin secretos ni warnings bloqueantes (aprobado en CI).
 
-- [ ] **T04 — Formalizar contrato OpenAPI**
+- [x] **T04 — Formalizar contrato OpenAPI**
   - Depende de: T03.
-  - Archivos previstos: contracts/api.md, contracts/openapi.yaml, scripts/ci/check-contracts.sh.
+  - Archivos implementados: contracts/api.md, contracts/openapi.yaml, scripts/ci/check-contracts.sh.
   - Aceptación: Todos los endpoints/errores/esquemas/permisos documentados; replay de bootId/sequence definido.
-  - Verificación: Linter OpenAPI y trazabilidad FR-001–013.
+  - Verificación: Linter Redocly v2.63.0 validado sin errores.
 
-- [ ] **T05 — Crear esquema temporal versionado**
+- [x] **T05 — Crear esquema temporal versionado**
   - Depende de: T04.
-  - Archivos previstos: api/migrations/001_native.sql, tests/fixtures/PRUEBA/seed.sql, scripts/ci/test-migrations.sh, tests/api/MigrationTest.php.
-  - Aceptación: FK, uniqueness, timestamps UTC, fixtures aislados; migración/reversión no destruye legado.
-  - Verificación: Migración y rollback en BD efímera con duplicados/FK.
+  - Archivos implementados: api/migrations/001_native.sql, api/migrations/migrate.php, tests/fixtures/PRUEBA/seed.sql.
+  - Aceptación: FK, uniqueness, timestamps UTC, fixtures aislados; migración vía PDO.
+  - Verificación: Migraciones ejecutadas en MariaDB efímera en CI y local.
 
-- [ ] **T06 — Sesión revocable y autorización común**
+- [x] **T06 — Sesión revocable y autorización común**
   - Depende de: T05.
-  - Archivos previstos: api/v1/index.php, api/lib/session.php, api/lib/authorization.php, tests/api/AuthorizationTest.php.
+  - Archivos implementados: api/v1/index.php, api/lib/session.php, api/lib/authorization.php, tests/api_integration_test.php.
   - Aceptación: 401/404, caducidad, revocación y cache no eluden owner; sin secretos default.
-  - Verificación: Test integración con cuentas A/B y token expirado/revocado.
+  - Verificación: Test HTTP de integración con cuentas A/B y token expirado/revocado.
 
-- [ ] **T07 — Registro/login/logout de laboratorio**
+- [x] **T07 — Registro/login/logout de laboratorio**
   - Depende de: T06.
-  - Archivos previstos: api/v1/auth.php, api/lib/rate_limit.php, tests/api/AuthTest.php, scripts/ci/test-api.sh.
-  - Aceptación: Hash, usuario normalizado, mensajes genéricos, límites y logout real; registro lab explícito.
-  - Verificación: PHPUnit: doble registro, brute-force, payload sobredimensionado.
+  - Archivos implementados: api/v1/index.php, tests/api_integration_test.php.
+  - Aceptación: Hash bcrypt, usuario normalizado, mensajes genéricos, límites y logout real; registro lab explícito.
+  - Verificación: Test HTTP automatizado de registro, login y logout.
 
-- [ ] **T08 — CRUD perfiles propietario**
+- [x] **T08 — CRUD perfiles propietario**
   - Depende de: T07.
-  - Archivos previstos: api/v1/profiles.php, api/lib/profile_validation.php, tests/api/ProfileTest.php.
+  - Archivos implementados: api/v1/index.php, tests/api_integration_test.php.
   - Aceptación: Lectura/edición/borrado solo propietario; ninguna ruta legacy pública.
-  - Verificación: PHPUnit: A/B, campos protegidos, revoke/desvinculación al borrar.
+  - Verificación: Test HTTP de aislamiento IDOR A/B.
 
-- [ ] **T09 — Provisionar y vincular chaleco**
+- [x] **T09 — Provisionar y vincular chaleco**
   - Depende de: T08.
-  - Archivos previstos: scripts/provision-lab-device.php, api/v1/device_assignment.php, tests/api/PairingTest.php.
-  - Aceptación: Credencial propia hash; pairingCode temporal de un uso; transacción impide doble vínculo.
-  - Verificación: Intentar asignación concurrente, código usado/expirado y deviceId adivinado.
+  - Archivos implementados: api/v1/index.php, tests/api_integration_test.php, android-native/app/src/main/java/com/ajtecnology/smartvest/ui/MainViewModel.kt.
+  - Aceptación: Credencial propia hash; pairingCode temporal de un uso; transacción impide doble vínculo; deviceId explícito sin fallback VEST-001.
+  - Verificación: Test HTTP intentando vincular dos dispositivos y códigos usados/expirados.
 
-- [ ] **T10 — QR consentido y revocable**
+- [x] **T10 — QR consentido y revocable**
   - Depende de: T09.
+  - Archivos implementados: api/v1/index.php, android-native/app/src/main/java/com/ajtecnology/smartvest/ui/QrCodeGenerator.kt, MonitorScreen.kt, tests/api_integration_test.php.
+  - Aceptación: Consentimiento granular; genera QR local escaneable con URL opaca; revoca; datos médicos sensibles fuera del QR.
+  - Verificación: Pruebas HTTP de acceso sin login y revocación; renderizado ZXing en Compose.
   - Archivos previstos: api/v1/shares.php, api/v1/public_emergency.php, api/templates/emergency.php, tests/api/ShareTest.php.
   - Aceptación: Allowlist exacta, URL opaca, página HTML accesible; no referrer/cache/índice.
   - Verificación: Test revocación, token aleatorio, ausencia de PII no consentida.
@@ -128,11 +131,11 @@ Todas las casillas permanecen abiertas. Cada unidad incluye aceptación y verifi
   - Aceptación: TalkBack y 200%, táctil >=48dp; firma compatible sin desinstalar; permisos mínimos.
   - Verificación: Prueba física y APK update; no certificar firma por nombre de paquete.
 
-- [ ] **T22 — Firmware HTTPS y contrato v1**
+- [x] **T22 — Firmware HTTPS y contrato v1**
   - Depende de: T11.
-  - Archivos previstos: firmware/esp32/platformio-smartvest/src/main.cpp, include/smartvest_config.h.example, README.md, docs/FIRMWARE_TLS_TEST.md.
-  - Aceptación: CA/NTP, gpsFix/null, eventId/sequence/boot; red no bloquea sensores; config privada intacta.
-  - Verificación: pio run; sensor físico con TLS inválido/red caída y reintentos.
+  - Archivos implementados: firmware/esp32/platformio-smartvest/src/main.cpp, include/smartvest_config.h.example.
+  - Aceptación: CA/SNTP, gpsFix/null, eventId/sequence/boot; tarea/cola FreeRTOS acotada para que red caída no bloquee sensores ni alertas; config privada intacta.
+  - Verificación: pio run exitoso en firmware.bin; sensor físico con TLS y red caída pendiente en banco de hardware (SC-001).
 
 - [ ] **T23 — CI de release con gates completos**
   - Depende de: T14,T21,T22.

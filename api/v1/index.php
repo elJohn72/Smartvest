@@ -559,19 +559,62 @@ if (preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) && $method === 'POST'
             $currSeq = (int)$currentState['sequence'];
             $currSos = (bool)$currentState['sos_active'];
 
-            // Política de actualización monotónica:
-            // - Mismo boot: solo actualizar si la secuencia es estrictamente mayor
-            // - Diferente boot: reinicio físico del ESP32 -> aceptar nuevo boot si sequence >= 0
+            // Política de actualización monotónica estricta y protección ante boots retirados:
+            // 1. Mismo boot: solo avanzar si la secuencia es estrictamente mayor.
+            //    Si la secuencia es menor o igual, un paquete rezagado NUNCA sobrescribe mediciones ni apaga SOS.
+            // 2. Diferente boot:
+            //    Verificar si $bootId es un boot retirado (ya visto en el pasado antes del boot actual).
+            //    Si en el historial ya existen registros de $currBoot con fecha posterior al primer registro de $bootId,
+            //    o si $bootId tiene registros históricos anteriores al boot actual, $bootId es un boot viejo/retirado.
             if ($bootId === $currBoot) {
                 if ($seq > $currSeq) {
                     $shouldUpdateState = true;
-                } elseif ($sos && !$currSos) {
-                    // Si el paquete trae una alerta SOS y el estado previo no la tenía, nunca apagar/perder el SOS
-                    $shouldUpdateState = true;
                 }
             } else {
-                // Nuevo ciclo de boot
-                $shouldUpdateState = true;
+                // Comprobar si $bootId es anterior a $currBoot comparando el primer registro histórico de ambos
+                $bootOrderStmt = $pdo->prepare('
+                    SELECT
+                        (SELECT MIN(received_at) FROM telemetry_history WHERE device_id = :dev AND boot_id = :currBoot) AS curr_first_seen,
+                        (SELECT MIN(received_at) FROM telemetry_history WHERE device_id = :dev AND boot_id = :newBoot) AS new_first_seen
+                ');
+                $bootOrderStmt->execute([
+                    'dev' => $deviceId,
+                    'currBoot' => $currBoot,
+                    'newBoot' => $bootId,
+                ]);
+                $order = $bootOrderStmt->fetch(PDO::FETCH_ASSOC);
+
+                $currFirst = $order['curr_first_seen'] ?? null;
+                $newFirst = $order['new_first_seen'] ?? null;
+
+                // Si el boot nuevo ya tenía registros previos a currFirst, es un boot retirado/viejo -> descartar reemplazo
+                $isRetiredBoot = false;
+                if ($currFirst !== null && $newFirst !== null) {
+                    if (strtotime($newFirst) < strtotime($currFirst)) {
+                        $isRetiredBoot = true;
+                    }
+                }
+
+                if (!$isRetiredBoot) {
+                    // Es un boot nuevo legítimo (reinicio del ESP32).
+                    // Sin embargo, si el estado actual tiene una alerta SOS activa y el nuevo boot llega con SOS inactivo,
+                    // solo reemplazar si el nuevo boot ya está establecido o mantener SOS visible.
+                    // Para evitar apagar un SOS reciente por un reinicio o replay sin SOS:
+                    $shouldUpdateState = true;
+                }
+            }
+        }
+
+        // Regla inviolable: Una lectura con SOS inactivo NUNCA debe apagar un SOS activo reciente.
+        // Si el estado previo tenía SOS activo y el paquete entrante viene con sos = false,
+        // pero $bootId es de un boot retirado o paquete rezagado, el SOS jamás se apaga.
+        if ($currentState && (bool)$currentState['sos_active'] && !$sos) {
+            if (!$shouldUpdateState) {
+                // Ya estaba descartado
+            } else if ($bootId !== (string)$currentState['boot_id']) {
+                // Si cambia de boot pero el estado actual tenía SOS activo, retener SOS activo en el nuevo estado
+                // a menos que se haya resuelto formalmente.
+                $sos = true;
             }
         }
 

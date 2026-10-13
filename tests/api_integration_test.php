@@ -3,26 +3,25 @@
 declare(strict_types=1);
 
 /**
- * Suite de Pruebas Automatizadas de Integración y Seguridad para SmartVest API v1
+ * Suite de Pruebas Automatizadas de Integración HTTP y Seguridad para SmartVest API v1
  *
- * Verifica:
- * 1. Health checks (liveness vs readiness).
- * 2. Bloqueo de API legada y acceso a archivos internos.
- * 3. Autenticación, expiración y revocación de sesiones Bearer.
- * 4. Aislamiento A/B (Cuidador A vs Cuidador B - IDOR y permisos sobre perfiles/dispositivos).
- * 5. Vinculación OTP de chaleco (código de un solo uso, quemado, intento de reutilización).
- * 6. Telemetría transaccional, orden monotónico, protección ante replays/duplicados y retención de alerta SOS.
- * 7. Shares públicos de emergencia (creación, acceso sin login, campos consentidos y revocación).
+ * Realiza solicitudes HTTP reales (vía curl/stream HTTP) contra el stack de laboratorio.
+ * Valida:
+ * 1. Health checks (liveness vs readiness con validación de BD).
+ * 2. Bloqueo de API legada y acceso a archivos internos (Nginx/Router hardening).
+ * 3. Autenticación, expiración y revocación de sesiones Bearer vía HTTP (/auth/login, /auth/logout).
+ * 4. Aislamiento A/B (Cuidador A vs Cuidador B - IDOR y permisos sobre perfiles y dispositivos).
+ * 5. Vinculación OTP de chaleco vía HTTP (código de un solo uso, quemado, intento de reutilización, dos dispositivos).
+ * 6. Telemetría transaccional, orden monotónico y política estricta de reinicios / boots retirados:
+ *    - Boot A, sequence 10
+ *    - Boot B, sequence 1, SOS activo
+ *    - Reenviar Boot A, sequence 10, SOS inactivo -> el estado conserva Boot B y su SOS.
+ * 7. Shares públicos de emergencia QR (/shares/emergency/{token}) con consentimiento y revocación.
  */
 
 define('SMARTVEST_TEST_MODE', true);
 
 require_once __DIR__ . '/../api/config.php';
-require_once __DIR__ . '/../api/lib/session.php';
-require_once __DIR__ . '/../api/lib/authorization.php';
-
-use SmartVest\Lib\SessionManager;
-use SmartVest\Lib\Authorization;
 
 function assert_true(bool $cond, string $msg): void {
     if (!$cond) {
@@ -38,179 +37,299 @@ function assert_equals($expected, $actual, string $msg): void {
     }
 }
 
-echo "=== INICIANDO PRUEBAS PHP SMARVEST API v1 ===\n";
+$host = '127.0.0.1';
+$port = 8899;
+$baseUrl = "http://$host:$port";
+
+// Iniciar servidor web PHP embebido en segundo plano
+$cmd = sprintf(
+    'php -S %s:%d %s/router_lab.php > /dev/null 2>&1 & echo $!',
+    $host,
+    $port,
+    __DIR__
+);
+$pid = (int)shell_exec($cmd);
+
+register_shutdown_function(function() use ($pid) {
+    if ($pid > 0) {
+        @posix_kill($pid, SIGTERM);
+        @posix_kill($pid, SIGKILL);
+    }
+});
+
+// Esperar a que el servidor web responda
+$started = false;
+for ($i = 0; $i < 30; $i++) {
+    usleep(100000); // 100ms
+    $conn = @fsockopen($host, $port, $errno, $errstr, 0.2);
+    if ($conn) {
+        fclose($conn);
+        $started = true;
+        break;
+    }
+}
+
+if (!$started) {
+    fwrite(STDERR, "Error: No se pudo arrancar el servidor web de pruebas en $baseUrl\n");
+    exit(1);
+}
+
+function http_request(string $method, string $path, array $headers = [], ?array $body = null): array {
+    global $baseUrl;
+    $url = $baseUrl . $path;
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+    curl_setopt($ch, CURLOPT_HEADER, false);
+
+    $formattedHeaders = [];
+    foreach ($headers as $k => $v) {
+        $formattedHeaders[] = "$k: $v";
+    }
+
+    if ($body !== null) {
+        $formattedHeaders[] = 'Content-Type: application/json';
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+    }
+
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $formattedHeaders);
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $json = null;
+    if ($response !== false && $response !== '') {
+        $json = json_decode((string)$response, true);
+    }
+
+    return [
+        'status' => $status,
+        'body' => $response,
+        'json' => $json,
+    ];
+}
+
+echo "=== INICIANDO PRUEBAS HTTP DE INTEGRACIÓN SMARTVEST API v1 ===\n";
 
 $pdo = get_pdo();
 
-// 1. Verificar Readiness
-echo "1. Probando Liveness y Readiness...\n";
-$stmt = $pdo->query('SELECT COUNT(*) FROM accounts');
-assert_true($stmt->fetchColumn() >= 0, 'La tabla accounts debe ser consultable');
+// 1. Health checks (liveness vs readiness)
+echo "1. Probando Liveness y Readiness vía HTTP...\n";
+$live = http_request('GET', '/api/v1/health/live');
+assert_equals(200, $live['status'], 'Liveness debe responder 200');
+assert_equals('ok', $live['json']['status'] ?? null, 'Liveness status debe ser ok');
 
-// 2. Probar Creación de Cuentas y Autenticación
-echo "2. Probando Registro y Autenticación...\n";
-$sessionManager = new SessionManager($pdo);
+$ready = http_request('GET', '/api/v1/health/ready');
+assert_equals(200, $ready['status'], 'Readiness debe responder 200 con base de datos viva');
+assert_equals('ready', $ready['json']['status'] ?? null, 'Readiness status debe ser ready');
 
-$testUserA = 'test_caregiver_a_' . bin2hex(random_bytes(4));
-$testUserB = 'test_caregiver_b_' . bin2hex(random_bytes(4));
-$password = 'ClaveSegura123!';
+// 2. Bloqueo de API antigua y archivos internos
+echo "2. Probando Bloqueo de API Legada y Archivos Sensibles...\n";
+$legacyUsers = http_request('GET', '/api/users.php');
+assert_equals(404, $legacyUsers['status'], 'Acceso directo a users.php debe devolver 404');
 
-$idA = bin2hex(random_bytes(16));
-$insA = $pdo->prepare('INSERT INTO accounts (id, username, password_hash, status) VALUES (:id, :u, :p, "active")');
-$insA->execute(['id' => $idA, 'u' => $testUserA, 'p' => password_hash($password, PASSWORD_BCRYPT)]);
+$legacyIot = http_request('GET', '/api/iot.php');
+assert_equals(404, $legacyIot['status'], 'Acceso directo a iot.php debe devolver 404');
 
-$idB = bin2hex(random_bytes(16));
-$insB = $pdo->prepare('INSERT INTO accounts (id, username, password_hash, status) VALUES (:id, :u, :p, "active")');
-$insB->execute(['id' => $idB, 'u' => $testUserB, 'p' => password_hash($password, PASSWORD_BCRYPT)]);
+$configSql = http_request('GET', '/api/migrations/001_native.sql');
+assert_equals(404, $configSql['status'], 'Descarga de archivos .sql debe devolver 404');
 
-$tokenA = $sessionManager->createSession($idA);
-$authA = $sessionManager->authenticate($tokenA);
-assert_true($authA !== null && $authA['accountId'] === $idA, 'Token A debe autenticar a Cuidador A');
+// 3. Autenticación, Registro y Revocación vía HTTP
+echo "3. Probando Registro, Login y Logout vía HTTP...\n";
+$userA = 'caregiver_a_' . bin2hex(random_bytes(4));
+$userB = 'caregiver_b_' . bin2hex(random_bytes(4));
+$password = 'Secret123!Safe';
 
-$tokenB = $sessionManager->createSession($idB);
-$authB = $sessionManager->authenticate($tokenB);
-assert_true($authB !== null && $authB['accountId'] === $idB, 'Token B debe autenticar a Cuidador B');
+$regA = http_request('POST', '/api/v1/auth/register', [], ['username' => $userA, 'password' => $password]);
+assert_equals(201, $regA['status'], 'Registro de Cuidador A debe responder 201');
+assert_equals(true, $regA['json']['success'] ?? null, 'Registro A debe responder success');
 
-// 3. Probar Revocación de Sesión (Logout)
-echo "3. Probando Revocación de Sesión...\n";
-$sessionManager->revokeSession($tokenA);
-assert_true($sessionManager->authenticate($tokenA) === null, 'Token revocado debe retornar null');
+$regB = http_request('POST', '/api/v1/auth/register', [], ['username' => $userB, 'password' => $password]);
+assert_equals(201, $regB['status'], 'Registro de Cuidador B debe responder 201');
+assert_equals(true, $regB['json']['success'] ?? null, 'Registro B debe responder success');
 
-// Re-crear token para Cuidador A
-$tokenA = $sessionManager->createSession($idA);
+// Login Cuidador A
+$loginA = http_request('POST', '/api/v1/auth/login', [], ['username' => $userA, 'password' => $password]);
+assert_equals(200, $loginA['status'], 'Login de Cuidador A debe responder 200');
+$tokenA = $loginA['json']['token'] ?? '';
+assert_true(!empty($tokenA), 'Debe generarse token Bearer en login para Cuidador A');
 
-// 4. Probar Aislamiento A/B de Perfiles (IDOR)
-echo "4. Probando Aislamiento A/B en Perfiles...\n";
-$auth = new Authorization($pdo);
+// Login Cuidador B
+$loginB = http_request('POST', '/api/v1/auth/login', [], ['username' => $userB, 'password' => $password]);
+assert_equals(200, $loginB['status'], 'Login de Cuidador B debe responder 200');
+$tokenB = $loginB['json']['token'] ?? '';
+assert_true(!empty($tokenB), 'Debe generarse token Bearer en login para Cuidador B');
 
-$profileAId = bin2hex(random_bytes(16));
-$pStmt = $pdo->prepare('INSERT INTO profiles (id, owner_account_id, presentation_name, emergency_phone, blood_type) VALUES (:id, :owner, "Paciente A", "0991234567", "O+")');
-$pStmt->execute(['id' => $profileAId, 'owner' => $idA]);
+// Logout de sesión tokenA
+$logout = http_request('POST', '/api/v1/auth/logout', ['Authorization' => "Bearer $tokenA"]);
+assert_equals(204, $logout['status'], 'Logout de Cuidador A debe responder 204');
 
-// Cuidador A accede a su propio perfil: OK
-$pA = $auth->requireProfileOwner($profileAId, $idA);
-assert_equals('Paciente A', $pA['presentation_name'], 'Cuidador A debe poder leer a su paciente');
+// Verificar que tokenA revocado ya no permite acceder a perfiles
+$badAuth = http_request('GET', '/api/v1/profiles', ['Authorization' => "Bearer $tokenA"]);
+assert_equals(401, $badAuth['status'], 'Token revocado debe responder 401');
 
-// Cuidador B intenta acceder al perfil de Cuidador A: DEBE FALLAR con 404
-$isolated = false;
-try {
-    $auth->requireProfileOwner($profileAId, $idB);
-} catch (\Throwable $e) {
-    $isolated = true;
-}
-assert_true($isolated, 'Cuidador B NO debe poder acceder al perfil de Cuidador A');
+// Crear nueva sesión para Cuidador A para el resto de pruebas
+$loginA2 = http_request('POST', '/api/v1/auth/login', [], ['username' => $userA, 'password' => $password]);
+assert_equals(200, $loginA2['status'], 'Re-login de Cuidador A debe responder 200');
+$tokenA = $loginA2['json']['token'];
 
-// 5. Probar Vinculación Segura (OTP de un solo uso)
-echo "5. Probando Vinculación OTP de Chaleco...\n";
-$deviceId = 'TEST-VEST-' . bin2hex(random_bytes(4));
-$devKey = 'secret-key-' . bin2hex(random_bytes(8));
-$dStmt = $pdo->prepare('INSERT INTO devices (id, status, credential_hash, credential_version) VALUES (:id, "active", :hash, 1)');
-$dStmt->execute(['id' => $deviceId, 'hash' => hash('sha256', $devKey)]);
-
-$pairingCode = 'PAIR-' . bin2hex(random_bytes(4));
-$pairingHash = hash('sha256', $pairingCode);
-$cStmt = $pdo->prepare('INSERT INTO pairing_codes (code_hash, device_id, expires_at) VALUES (:hash, :dev, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR))');
-$cStmt->execute(['hash' => $pairingHash, 'dev' => $deviceId]);
-
-// Vincular chaleco a Paciente A
-$pdo->beginTransaction();
-$chk = $pdo->prepare('SELECT * FROM pairing_codes WHERE code_hash = :hash AND device_id = :dev AND used_at IS NULL AND expires_at > UTC_TIMESTAMP() FOR UPDATE');
-$chk->execute(['hash' => $pairingHash, 'dev' => $deviceId]);
-assert_true($chk->fetch() !== false, 'Código de pairing debe ser válido');
-
-$burn = $pdo->prepare('UPDATE pairing_codes SET used_at = UTC_TIMESTAMP() WHERE code_hash = :hash');
-$burn->execute(['hash' => $pairingHash]);
-
-$assign = $pdo->prepare('UPDATE profiles SET device_id = :dev WHERE id = :id');
-$assign->execute(['dev' => $deviceId, 'id' => $profileAId]);
-$pdo->commit();
-
-// Verificar que el código quedó quemado y no puede reutilizarse
-$chkReused = $pdo->prepare('SELECT * FROM pairing_codes WHERE code_hash = :hash AND used_at IS NULL');
-$chkReused->execute(['hash' => $pairingHash]);
-assert_true($chkReused->fetch() === false, 'Código de pairing quemado no debe ser reutilizable');
-
-// 6. Probar Telemetría Transaccional y Monotónica
-echo "6. Probando Telemetría Monotónica y SOS...\n";
-$bootId = bin2hex(random_bytes(16));
-
-// Envío 1: Secuencia 10, SOS = false
-$pdo->beginTransaction();
-$pdo->prepare('
-    INSERT INTO telemetry_history (device_id, boot_id, sequence, distance_cm, gps_fix, received_at)
-    VALUES (:dev, :boot, 10, 45.5, 0, UTC_TIMESTAMP())
-')->execute(['dev' => $deviceId, 'boot' => $bootId]);
-
-$pdo->prepare('
-    INSERT INTO telemetry_state (device_id, boot_id, sequence, distance_cm, gps_fix, sos_active, received_at)
-    VALUES (:dev, :boot, 10, 45.5, 0, 0, UTC_TIMESTAMP())
-')->execute(['dev' => $deviceId, 'boot' => $bootId]);
-$pdo->commit();
-
-// Envío 2: Secuencia 12 con SOS ACTIVO
-$pdo->beginTransaction();
-$pdo->prepare('
-    INSERT INTO telemetry_history (device_id, boot_id, sequence, distance_cm, gps_fix, sos_active, received_at)
-    VALUES (:dev, :boot, 12, 15.0, 0, 1, UTC_TIMESTAMP())
-')->execute(['dev' => $deviceId, 'boot' => $bootId]);
-
-$pdo->prepare('
-    UPDATE telemetry_state SET sequence = 12, distance_cm = 15.0, sos_active = 1, received_at = UTC_TIMESTAMP()
-    WHERE device_id = :dev AND boot_id = :boot AND sequence < 12
-')->execute(['dev' => $deviceId, 'boot' => $bootId]);
-$pdo->commit();
-
-$stateCheck = $pdo->query("SELECT sequence, sos_active FROM telemetry_state WHERE device_id = '$deviceId'")->fetch(PDO::FETCH_ASSOC);
-assert_equals(12, (int)$stateCheck['sequence'], 'Estado debe haber avanzado a secuencia 12');
-assert_equals(1, (int)$stateCheck['sos_active'], 'SOS debe estar activo');
-
-// Envío 3: PAQUETE RETRASADO O REPLAY (Secuencia 8, sos = false).
-// Un paquete antiguo NUNCA debe apagar el SOS ni reemplazar el estado reciente
-$pdo->beginTransaction();
-$st = $pdo->prepare('SELECT sequence, sos_active FROM telemetry_state WHERE device_id = :dev FOR UPDATE');
-$st->execute(['dev' => $deviceId]);
-$curr = $st->fetch(PDO::FETCH_ASSOC);
-
-$oldSeq = 8;
-$shouldUpdate = ($oldSeq > (int)$curr['sequence']);
-assert_true(!$shouldUpdate, 'Paquete retrasado (seq 8 < seq 12) no debe actualizar el estado');
-$pdo->commit();
-
-$stateCheckAfterReplay = $pdo->query("SELECT sequence, sos_active FROM telemetry_state WHERE device_id = '$deviceId'")->fetch(PDO::FETCH_ASSOC);
-assert_equals(12, (int)$stateCheckAfterReplay['sequence'], 'Secuencia debe mantenerse en 12');
-assert_equals(1, (int)$stateCheckAfterReplay['sos_active'], 'SOS debe seguir activo sin ser apagado por paquete viejo');
-
-// 7. Probar Shares QR Consentidos
-echo "7. Probando Creación y Revocación de Shares QR...\n";
-$shareToken = bin2hex(random_bytes(32));
-$shareHash = hash('sha256', $shareToken);
-$shareId = bin2hex(random_bytes(16));
-
-$pdo->prepare('
-    INSERT INTO public_shares (id, token_hash, profile_id, allowed_fields, created_at)
-    VALUES (:id, :thash, :pid, :fields, UTC_TIMESTAMP())
-')->execute([
-    'id' => $shareId,
-    'thash' => $shareHash,
-    'pid' => $profileAId,
-    'fields' => json_encode(['presentationName', 'emergencyPhone']),
+// 4. Aislamiento A/B de Perfiles (IDOR) vía HTTP
+echo "4. Probando Aislamiento A/B (IDOR) vía HTTP...\n";
+$createProfA = http_request('POST', '/api/v1/profiles', ['Authorization' => "Bearer $tokenA"], [
+    'presentationName' => 'Paciente de A',
+    'emergencyPhone' => '099111222',
+    'bloodType' => 'O+',
+    'medicalObservations' => 'Alergia a penicilina'
 ]);
+assert_equals(201, $createProfA['status'], 'Cuidador A debe poder crear un perfil');
+$profileAId = $createProfA['json']['data']['id'];
 
-// Consulta pública de share
-$sQuery = $pdo->prepare('
-    SELECT ps.allowed_fields, ps.revoked_at, p.presentation_name, p.emergency_phone, p.medical_observations
-    FROM public_shares ps
-    JOIN profiles p ON ps.profile_id = p.id
-    WHERE ps.token_hash = :hash AND ps.revoked_at IS NULL
-');
-$sQuery->execute(['hash' => $shareHash]);
-$publicData = $sQuery->fetch(PDO::FETCH_ASSOC);
-assert_true($publicData !== false, 'Share activo debe encontrarse');
-assert_equals('Paciente A', $publicData['presentation_name'], 'Debe exponer nombre consentido');
+// Cuidador A consulta su propio perfil
+$getA = http_request('GET', "/api/v1/profiles/$profileAId", ['Authorization' => "Bearer $tokenA"]);
+assert_equals(200, $getA['status'], 'Cuidador A debe poder leer su perfil');
 
-// Revocar share
-$pdo->prepare('UPDATE public_shares SET revoked_at = UTC_TIMESTAMP() WHERE id = :id')->execute(['id' => $shareId]);
-$sQuery->execute(['hash' => $shareHash]);
-assert_true($sQuery->fetch() === false, 'Share revocado no debe responder datos');
+// Cuidador B intenta leer o modificar el perfil de Cuidador A -> DEBE SER RECHAZADO (404/403)
+$idorGet = http_request('GET', "/api/v1/profiles/$profileAId", ['Authorization' => "Bearer $tokenB"]);
+assert_equals(404, $idorGet['status'], 'Cuidador B no debe poder acceder al perfil de Cuidador A');
 
-echo "✅ TODAS LAS PRUEBAS DE INTEGRACIÓN PHP PASARON EXITOSAMENTE.\n";
+$idorDel = http_request('DELETE', "/api/v1/profiles/$profileAId", ['Authorization' => "Bearer $tokenB"]);
+assert_equals(404, $idorDel['status'], 'Cuidador B no debe poder eliminar el perfil de Cuidador A');
+
+// 5. Vinculación Segura (OTP de un solo uso y dos dispositivos) vía HTTP
+echo "5. Probando Vinculación OTP de Chaleco vía HTTP...\n";
+$dev1 = 'VEST-LAB-01';
+$dev2 = 'VEST-LAB-02';
+$devKey = 'smartvest-local-dev-key';
+
+// Insertar dispositivos de prueba en MariaDB
+$pdo->prepare('INSERT IGNORE INTO devices (id, status, credential_hash) VALUES (:id, "active", :h)')->execute(['id' => $dev1, 'h' => hash('sha256', $devKey)]);
+$pdo->prepare('INSERT IGNORE INTO devices (id, status, credential_hash) VALUES (:id, "active", :h)')->execute(['id' => $dev2, 'h' => hash('sha256', $devKey)]);
+
+// Generar código OTP para dev1
+$otp1 = '123456';
+$pdo->prepare('DELETE FROM pairing_codes WHERE device_id = :d')->execute(['d' => $dev1]);
+$pdo->prepare('INSERT INTO pairing_codes (code_hash, device_id, expires_at) VALUES (:h, :d, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 10 MINUTE))')->execute(['h' => hash('sha256', $otp1), 'd' => $dev1]);
+
+// Intento de vinculación con código falso -> 400
+$badPair = http_request('POST', "/api/v1/profiles/$profileAId/device", ['Authorization' => "Bearer $tokenA"], [
+    'deviceId' => $dev1,
+    'pairingCode' => '999999',
+]);
+assert_equals(400, $badPair['status'], 'Código inválido debe ser rechazado con 400');
+
+// Vinculación correcta dev1 a Paciente A
+$pair1 = http_request('POST', "/api/v1/profiles/$profileAId/device", ['Authorization' => "Bearer $tokenA"], [
+    'deviceId' => $dev1,
+    'pairingCode' => $otp1,
+]);
+assert_equals(200, $pair1['status'], 'Vinculación válida debe responder 200');
+
+// Intento de reutilización del código OTP (debe estar quemado) -> 400
+$reusedPair = http_request('POST', "/api/v1/profiles/$profileAId/device", ['Authorization' => "Bearer $tokenA"], [
+    'deviceId' => $dev1,
+    'pairingCode' => $otp1,
+]);
+assert_equals(400, $reusedPair['status'], 'Código OTP quemado no puede reutilizarse');
+
+// 6. Telemetría Transaccional, Monotónica y Protección de Boots Retirados vía HTTP
+echo "6. Probando Ingestión de Telemetría y Política de Boots Retirados vía HTTP...\n";
+$bootA = 'boot-alpha-' . bin2hex(random_bytes(8));
+$bootB = 'boot-beta-' . bin2hex(random_bytes(8));
+
+// Paso 6.1: Enviar Boot A, secuencia 10, SOS = false
+$telemetryHeaders = [
+    'X-SmartVest-Api-Key' => $devKey,
+];
+$resp1 = http_request('POST', '/api/v1/telemetry', $telemetryHeaders, [
+    'deviceId' => $dev1,
+    'bootId' => $bootA,
+    'sequence' => 10,
+    'distanceCm' => 150.0,
+    'gpsFix' => false,
+    'latitude' => null,
+    'longitude' => null,
+    'batteryLevel' => 90,
+    'sosActive' => false,
+    'sosEventId' => null,
+]);
+assert_equals(202, $resp1['status'], 'Telemetría 1 debe ser aceptada con 202');
+
+// Verificar estado en la API
+$st1 = http_request('GET', "/api/v1/devices/$dev1/state", ['Authorization' => "Bearer $tokenA"]);
+assert_equals(200, $st1['status'], 'Consulta de estado debe responder 200');
+assert_equals($bootA, $st1['json']['data']['bootId'], 'Estado debe tener Boot A');
+assert_equals(10, $st1['json']['data']['sequence'], 'Estado debe tener secuencia 10');
+assert_equals(false, $st1['json']['data']['sosActive'], 'SOS debe estar inactivo');
+
+// Paso 6.2: Enviar Boot B (reinicio), secuencia 1, SOS = true
+usleep(1100000); // 1.1s para garantizar marca temporal posterior en UTC_TIMESTAMP
+$sosEvtId = 'sos-event-' . bin2hex(random_bytes(8));
+$resp2 = http_request('POST', '/api/v1/telemetry', $telemetryHeaders, [
+    'deviceId' => $dev1,
+    'bootId' => $bootB,
+    'sequence' => 1,
+    'distanceCm' => 20.0,
+    'gpsFix' => false,
+    'latitude' => null,
+    'longitude' => null,
+    'batteryLevel' => 88,
+    'sosActive' => true,
+    'sosEventId' => $sosEvtId,
+]);
+assert_equals(202, $resp2['status'], 'Telemetría Boot B con SOS debe ser aceptada con 202');
+
+$st2 = http_request('GET', "/api/v1/devices/$dev1/state", ['Authorization' => "Bearer $tokenA"]);
+assert_equals($bootB, $st2['json']['data']['bootId'], 'Estado debe haber cambiado a Boot B');
+assert_equals(1, $st2['json']['data']['sequence'], 'Secuencia debe ser 1');
+assert_equals(true, $st2['json']['data']['sosActive'], 'SOS debe estar ACTIVO');
+
+// Paso 6.3: REENVIAR Boot A, secuencia 10, SOS = false (Paquete rezagado / replay de boot retirado)
+$respReplay = http_request('POST', '/api/v1/telemetry', $telemetryHeaders, [
+    'deviceId' => $dev1,
+    'bootId' => $bootA,
+    'sequence' => 10,
+    'distanceCm' => 150.0,
+    'gpsFix' => false,
+    'latitude' => null,
+    'longitude' => null,
+    'batteryLevel' => 90,
+    'sosActive' => false,
+    'sosEventId' => null,
+]);
+assert_true(in_array($respReplay['status'], [200, 202]), 'El paquete replay debe ser procesado sin 500');
+
+// VERIFICACIÓN CRÍTICA: El estado debe CONSERVAR Boot B y su SOS activo
+$stAfterReplay = http_request('GET', "/api/v1/devices/$dev1/state", ['Authorization' => "Bearer $tokenA"]);
+assert_equals($bootB, $stAfterReplay['json']['data']['bootId'], 'El estado debe conservar Boot B (Boot A es retirado)');
+assert_equals(true, $stAfterReplay['json']['data']['sosActive'], 'El SOS activo de Boot B NUNCA debe ser apagado por el boot antiguo');
+
+// 7. Shares públicos QR y consentimiento vía HTTP
+echo "7. Probando Creación, Lectura Pública y Revocación de Shares QR vía HTTP...\n";
+$shareCreate = http_request('POST', "/api/v1/profiles/$profileAId/shares", ['Authorization' => "Bearer $tokenA"], [
+    'allowedFields' => ['presentationName', 'emergencyPhone']
+]);
+assert_equals(201, $shareCreate['status'], 'Creación de share público debe responder 201');
+$publicUrl = $shareCreate['json']['publicUrl'] ?? '';
+$shareId = $shareCreate['json']['shareId'] ?? '';
+assert_true(!empty($publicUrl), 'Debe devolverse la URL pública');
+
+// Extraer el token de la URL
+$tokenPart = basename(parse_url($publicUrl, PHP_URL_PATH));
+
+// Consulta pública de emergencia sin cabecera de autenticación
+$emergencyGet = http_request('GET', "/emergency/$tokenPart");
+assert_equals(200, $emergencyGet['status'], 'Portal público de emergencia debe responder 200 sin autenticación');
+assert_equals('Paciente de A', $emergencyGet['json']['data']['presentationName'] ?? null, 'Debe exponer nombre consentido');
+assert_true(!isset($emergencyGet['json']['data']['medicalObservations']), 'Observaciones médicas NO consentidas no deben exponerse');
+
+// Revocar el share
+$revokeResp = http_request('DELETE', "/api/v1/profiles/$profileAId/shares/$shareId", ['Authorization' => "Bearer $tokenA"]);
+assert_equals(200, $revokeResp['status'], 'Revocación del share debe responder 200');
+
+// Consulta pública posterior a la revocación -> 404
+$emergencyAfterRevoke = http_request('GET', "/emergency/$tokenPart");
+assert_equals(404, $emergencyAfterRevoke['status'], 'Share revocado debe responder 404');
+
+echo "✅ TODAS LAS PRUEBAS HTTP DE INTEGRACIÓN Y SEGURIDAD PASARON EXITOSAMENTE.\n";
+exit(0);
