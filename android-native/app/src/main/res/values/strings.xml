@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">SmartVest</string>
+    <string name="login_title">SmartVest Cuidadores</string>
+    <string name="login_subtitle">Monitoreo asistencial y seguridad en tiempo real</string>
+    <string name="username_label">Usuario</string>
+    <string name="password_label">Contraseña</string>
+    <string name="login_button">Iniciar sesión</string>
+    <string name="logout_button">Cerrar sesión</string>
+    <string name="status_loading">Cargando datos…</string>
+    <string name="status_no_data">Sin datos del chaleco</string>
+    <string name="status_stale">Datos desactualizados (más de 30s)</string>
+    <string name="status_no_connection">Sin conexión con el servidor</string>
+    <string name="sos_active_alert">EMERGENCIA: Alerta SOS activada</string>
+    <string name="sos_normal">Sistema operando normalmente</string>
+    <string name="distance_unit">cm al obstáculo</string>
+    <string name="battery_label">Batería:</string>
+    <string name="gps_no_fix">GPS sin señal</string>
+    <string name="gps_fix">GPS conectado</string>
+    <string name="pair_device_title">Vincular Chaleco</string>
+    <string name="device_id_label">ID del Chaleco (ej. VEST-001)</string>
+    <string name="pairing_code_label">Código de vinculación</string>
+    <string name="pair_button">Vincular</string>
+    <string name="qr_share_title">QR de Emergencia</string>
+    <string name="qr_share_desc">Generar QR público de rescate con información médica consentida</string>
+    <string name="generate_qr_button">Generar QR</string>
+    <string name="revoke_qr_button">Revocar QR</string>
+</resources>

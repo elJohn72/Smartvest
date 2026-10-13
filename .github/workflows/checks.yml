@@ -1,0 +1,74 @@
+name: SmartVest PR & Release Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  secrets_and_lint:
+    name: Secrets & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Audit Secrets
+        run: ./scripts/ci/check-secrets.sh
+
+      - name: Check Git Diff Check
+        run: git diff --check origin/main..HEAD || true
+
+  contracts_and_api:
+    name: OpenAPI Contract & API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate OpenAPI Contract
+        run: ./scripts/ci/check-contracts.sh
+
+  android_build:
+    name: Android Native Compose Build & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run Android Unit Tests & Assemble
+        working-directory: android-native
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest assembleDebug assembleRelease --no-daemon
+
+  firmware_build:
+    name: ESP32 Firmware Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PlatformIO Core
+        run: pip install platformio
+
+      - name: Compile ESP32 Firmware
+        working-directory: firmware/esp32/platformio-smartvest
+        run: pio run

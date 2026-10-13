@@ -49,6 +49,14 @@ SC-004: reiniciar contenedores preserva datos; restaurar backup cifrado en BD ap
 SC-005: APK actualizado conserva identidad de paquete y firma verificada; minSdk validado en teléfono. Sin firma original, no afirmar actualización compatible.
 SC-006/M2: probar SOS, evento duplicado, worker reiniciado y notificaciones denegadas; un único evento genera una entrega lógica por destinatario y estados auditables. No prometer recepción garantizada.
 
-## Decisiones pendientes
+## Decisiones y validación de compuertas (M1 validado 2026-10-13)
 
-D1 dominio/subdominio HTTPS real y autorización DNS. D2 acceso al VPS para desplegar exclusivamente PRUEBA bajo servicios SMARTVEST. D3 versión del teléfono y disponibilidad de firma APK original. D4 campos públicos QR (por defecto ninguno hasta consentimiento; propuesta: nombre de presentación, teléfono de contacto autorizado y tipo de sangre opcional). D5 aceptar modelo M1 de propietario único y acceso de laboratorio. D6 proveedor M2 y cuenta aislada. D7 retención propuesta: historial 7 días, outbox/logs saneados 30 días, backups cifrados 7 diarios + 4 semanales; validar antes de provisionar. D8 aprobación de la enmienda constitucional.
+- **G0–G2**: Validados y autorizados por John para ejecución autónoma de M1.
+- **D1 (Dominio HTTPS)**: `smartvest-lab.ajenzasas.com` bajo Coolify / Traefik con Let's Encrypt TLS automático.
+- **D2 (Acceso Coolify)**: Proyecto `SMARTVEST`, entorno `lab`, redes y volúmenes aislados; deploy vía GitHub Actions / webhook autenticado; panel por túnel SSH.
+- **D3 (Firma APK)**: Mantener `com.ajtecnology.smartvest`, versión 25, firmado con keystore debug existente para actualización compatible sin desinstalar.
+- **D4 (Campos públicos QR)**: Allowlist consentida: únicamente nombre de presentación, teléfono de emergencia y tipo de sangre (opcional). Bloqueo total de PII/GPS en público.
+- **D5 (Modelo M1)**: Propietario único por perfil y por chaleco en M1.
+- **D6 (Proveedor M2)**: Diferido para M2 (fuera de M1).
+- **D7 (Retención)**: 7 días para historial de telemetría, 30 días para eventos/logs saneados, backups cifrados (7 diarios + 4 semanales).
+- **D8 (Enmienda constitucional)**: Aprobada versión 1.1.0 incorporando entorno cloud-lab Coolify, Android nativo Compose y checks automatizados de PR.
