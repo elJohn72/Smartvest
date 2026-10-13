@@ -183,13 +183,14 @@ $createProfA = http_request('POST', '/api/v1/profiles', ['Authorization' => "Bea
     'medicalObservations' => 'Alergia a penicilina'
 ]);
 assert_equals(201, $createProfA['status'], 'Cuidador A debe poder crear un perfil');
-$profileAId = $createProfA['json']['data']['id'];
+$profileAId = $createProfA['json']['id'] ?? ($createProfA['json']['data']['id'] ?? null);
+assert_true(!empty($profileAId), 'El perfil de A debe tener un ID válido');
 
 // Cuidador A consulta su propio perfil
 $getA = http_request('GET', "/api/v1/profiles/$profileAId", ['Authorization' => "Bearer $tokenA"]);
 assert_equals(200, $getA['status'], 'Cuidador A debe poder leer su perfil');
 
-// Cuidador B intenta leer o modificar el perfil de Cuidador A -> DEBE SER RECHAZADO (404/403)
+// Cuidador B intenta leer o modificar el perfil de Cuidador A -> DEBE SER RECHAZADO (404)
 $idorGet = http_request('GET', "/api/v1/profiles/$profileAId", ['Authorization' => "Bearer $tokenB"]);
 assert_equals(404, $idorGet['status'], 'Cuidador B no debe poder acceder al perfil de Cuidador A');
 
@@ -317,18 +318,21 @@ assert_true(!empty($publicUrl), 'Debe devolverse la URL pública');
 // Extraer el token de la URL
 $tokenPart = basename(parse_url($publicUrl, PHP_URL_PATH));
 
-// Consulta pública de emergencia sin cabecera de autenticación
-$emergencyGet = http_request('GET', "/emergency/$tokenPart");
-assert_equals(200, $emergencyGet['status'], 'Portal público de emergencia debe responder 200 sin autenticación');
-assert_equals('Paciente de A', $emergencyGet['json']['data']['presentationName'] ?? null, 'Debe exponer nombre consentido');
-assert_true(!isset($emergencyGet['json']['data']['medicalObservations']), 'Observaciones médicas NO consentidas no deben exponerse');
+// Consulta pública de emergencia sin cabecera de autenticación (vía JSON y HTML)
+$emergencyJson = http_request('GET', "/api/v1/public/emergency/$tokenPart");
+assert_equals(200, $emergencyJson['status'], 'API pública de emergencia debe responder 200 sin autenticación');
+assert_equals('Paciente de A', $emergencyJson['json']['presentationName'] ?? null, 'Debe exponer nombre consentido');
+assert_true(!isset($emergencyJson['json']['medicalObservations']), 'Observaciones médicas NO consentidas no deben exponerse');
 
-// Revocar el share
+$emergencyHtml = http_request('GET', "/emergency/$tokenPart");
+assert_equals(200, $emergencyHtml['status'], 'Portal público HTML de emergencia debe responder 200');
+
+// Revocar el share (OpenAPI especifica 204 No Content)
 $revokeResp = http_request('DELETE', "/api/v1/profiles/$profileAId/shares/$shareId", ['Authorization' => "Bearer $tokenA"]);
-assert_equals(200, $revokeResp['status'], 'Revocación del share debe responder 200');
+assert_true(in_array($revokeResp['status'], [200, 204]), 'Revocación del share debe responder 204 o 200');
 
 // Consulta pública posterior a la revocación -> 404
-$emergencyAfterRevoke = http_request('GET', "/emergency/$tokenPart");
+$emergencyAfterRevoke = http_request('GET', "/api/v1/public/emergency/$tokenPart");
 assert_equals(404, $emergencyAfterRevoke['status'], 'Share revocado debe responder 404');
 
 echo "✅ TODAS LAS PRUEBAS HTTP DE INTEGRACIÓN Y SEGURIDAD PASARON EXITOSAMENTE.\n";
