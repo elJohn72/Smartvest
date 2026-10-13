@@ -116,6 +116,7 @@ if (preg_match('#^(?:public/)?emergency/([^/]+)$#', $path, $m) || preg_match('#^
   <meta charset=\"utf-8\">
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
   <title>Emergencia SmartVest</title>
+  <link rel=\"icon\" href=\"/brand/favicon.ico\">
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin:0; padding:20px; background:#f4f6f8; color:#1a202c; line-height:1.5; }
     .card { max-width:480px; margin:20px auto; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); padding:24px; border-top:6px solid #dc3545; }

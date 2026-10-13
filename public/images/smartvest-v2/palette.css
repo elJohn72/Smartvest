@@ -1,0 +1,12 @@
+:root {
+  --smartvest-primary: #1E40AF;
+  --smartvest-dark: #0F172A;
+  --smartvest-accent: #EA580C;
+  --smartvest-background: #F8FAFC;
+  --smartvest-surface: #FFFFFF;
+  --smartvest-text: #334155;
+  --smartvest-secondaryText: #64748B;
+  --smartvest-warningText: #C2410C;
+  --smartvest-sos: #B91C1C;
+  --smartvest-success: #166534;
+}
