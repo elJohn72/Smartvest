@@ -69,6 +69,10 @@ jobs:
       - name: Install PlatformIO Core
         run: pip install platformio
 
+      - name: Prepare Sample Configuration
+        working-directory: firmware/esp32/platformio-smartvest
+        run: cp include/smartvest_config.h.example include/smartvest_config.h
+
       - name: Compile ESP32 Firmware
         working-directory: firmware/esp32/platformio-smartvest
         run: pio run
