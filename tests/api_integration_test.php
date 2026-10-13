@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Suite de Pruebas Automatizadas de Integración y Seguridad para SmartVest API v1
- * 
+ *
  * Verifica:
  * 1. Health checks (liveness vs readiness).
  * 2. Bloqueo de API legada y acceso a archivos internos.

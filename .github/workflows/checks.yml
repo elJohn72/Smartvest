@@ -56,10 +56,13 @@ jobs:
 
       - name: Execute Database Migrations
         env:
-          MYSQL_PWD: smartvest_lab_password
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: smartvest
+          DB_USER: smartvest_user
+          DB_PASSWORD: smartvest_lab_password
         run: |
-          mariadb -h 127.0.0.1 -u smartvest_user smartvest < api/migrations/001_native.sql
-          mariadb -h 127.0.0.1 -u smartvest_user smartvest < tests/fixtures/PRUEBA/seed.sql
+          php api/migrations/migrate.php tests/fixtures/PRUEBA/seed.sql
 
       - name: Run PHP Integration & Authorization Tests
         env:
