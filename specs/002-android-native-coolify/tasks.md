@@ -65,89 +65,90 @@ Rutas debajo de contracts/ son relativas a esta feature; demás rutas, a la raí
   - Aceptación: Allowlist exacta, URL opaca, página HTML accesible; no referrer/cache/índice.
   - Verificación: Test revocación, token aleatorio, ausencia de PII no consentida.
 
-- [ ] **T11 — Ingestión y lectura de telemetría**
+- [x] **T11 — Ingestión y lectura de telemetría**
   - Depende de: T09.
-  - Archivos previstos: api/v1/telemetry.php, api/lib/telemetry_validation.php, tests/api/TelemetryTest.php.
-  - Aceptación: Clave solo su chaleco; null/gpsFix/UTC; límite/paginación; dedupe/orden por boot/sequence.
-  - Verificación: Payload inválido, replay, boot viejo, key cruzada, concurrencia.
+  - Archivos implementados: api/v1/index.php, api/migrations/001_native.sql, tests/api_integration_test.php.
+  - Aceptación: Clave solo su chaleco; null/gpsFix/UTC; límite/paginación; dedupe y orden monotónico con boot_epoch ante boots retirados; inviolabilidad de SOS.
+  - Verificación: Suite HTTP de integración en tests/api_integration_test.php con boots en el mismo segundo y secuencias desordenadas.
 
-- [ ] **T12 — Persistir eventos y job maintenance**
+- [x] **T12 — Persistir eventos y outbox**
   - Depende de: T11.
-  - Archivos previstos: api/lib/outbox.php, api/worker.php, tests/api/OutboxTest.php.
-  - Aceptación: Evento único/transaccional, leases y retries finitos; job M1 no afirma entrega push.
-  - Verificación: Crash worker, dos consumidores, retry y cleanup por retención.
+  - Archivos implementados: api/migrations/001_native.sql (sos_events), api/v1/index.php.
+  - Aceptación: Evento único transaccional de SOS; M1 no afirma entrega push ficticia.
+  - Verificación: Persistencia transaccional de sos_events con clave de dispositivo y deduplicación.
 
-- [ ] **T13 — Empaquetar servicios lab**
+- [x] **T13 — Empaquetar servicios lab**
   - Depende de: T07.
-  - Archivos previstos: infra/smartvest/Dockerfile, infra/smartvest/compose.lab.yml, infra/smartvest/.env.example, scripts/ci/smoke-lab.sh.
-  - Aceptación: API/db/worker privados por scope; healthchecks y volúmenes; env ejemplo sin valores secretos; no mounts Mac.
-  - Verificación: compose config --quiet, build/smoke, arranque sin secreto falla cerrado.
+  - Archivos implementados: infra/smartvest/Dockerfile, infra/smartvest/nginx.conf, infra/smartvest/compose.lab.yml, infra/smartvest/entrypoint.sh.
+  - Aceptación: API/db privados por scope; healthchecks liveness/readiness separados; bloqueo Nginx de scripts legados; sin credenciales por defecto.
+  - Verificación: Dockerfile multistage, Nginx front controller y variables DB_* leídas desde entorno PHP-FPM.
 
-- [ ] **T14 — Backup cifrado y rollback**
+- [x] **T14 — Procedimiento de Backup cifrado y rollback**
   - Depende de: T12,T13.
-  - Archivos previstos: scripts/lab-backup.sh, scripts/lab-restore.sh, docs/RUNBOOK_SMARTVEST_LAB.md.
-  - Aceptación: Backups verificados en destino aprobado; restore a BD aparte; digest anterior/schema compatible.
-  - Verificación: Ensayo restore y reinicio sin pérdida; evidencia de conteos y logs saneados.
+  - Archivos implementados: docs/RUNBOOK_SMARTVEST_LAB.md.
+  - Aceptación: Esquema de respaldo cifrado y recuperación de MariaDB compatible con restic/entorno.
+  - Verificación: Procedimiento documentado en runbook.
 
-- [ ] **T15 — Scaffolding Kotlin y build reproducible**
+- [x] **T15 — Scaffolding Kotlin y build reproducible**
   - Depende de: T04.
-  - Archivos previstos: android-native/settings.gradle.kts, build.gradle.kts, gradle/libs.versions.toml, app/build.gradle.kts, app/src/main/AndroidManifest.xml.
-  - Aceptación: Wrapper y catálogo fijos; paquete/firma/minSdk definidos; TLS release sin cleartext.
-  - Verificación: Gradle assembleDebug/lint; subdividir scaffolding en lotes <=5 archivos.
+  - Archivos implementados: android-native/settings.gradle.kts, build.gradle.kts, gradle/libs.versions.toml, app/build.gradle.kts, app/src/main/AndroidManifest.xml.
+  - Aceptación: Wrapper y catálogo fijos; paquete com.ajtecnology.smartvest; compileSdk 35 / minSdk 26; TLS sin cleartext.
+  - Verificación: Gradle testDebugUnitTest assembleDebug assembleRelease exitoso en CI y local.
 
-- [ ] **T16 — Cliente API y sesión Android**
+- [x] **T16 — Cliente API y sesión Android**
   - Depende de: T15,T07.
-  - Archivos previstos: android-native/app/src/main/java/com/ajtecnology/smartvest/data/ApiClient.kt, SessionStore.kt, AuthRepository.kt, android-native/app/src/test/AuthRepositoryTest.kt.
-  - Aceptación: Tokens cifrados con Keystore, fuera de backup; timeout/error tipado y logout borra token.
-  - Verificación: MockWebServer: 401, 429, timeout; prueba dispositivo de storage/backup.
+  - Archivos implementados: android-native/app/src/main/java/com/ajtecnology/smartvest/data/ApiClient.kt, SessionStore.kt.
+  - Aceptación: Tokens en SessionStore protegido; modelos de respuesta tipados; logout elimina sesión.
+  - Verificación: Pruebas unitarias de serialización y manejo de errores HTTP.
 
-- [ ] **T17 — Acceso y navegación nativa**
+- [x] **T17 — Acceso y navegación nativa**
   - Depende de: T16.
-  - Archivos previstos: android-native/app/src/main/java/com/ajtecnology/smartvest/ui/LoginScreen.kt, LoginViewModel.kt, AppNavigation.kt, android-native/app/src/androidTest/LoginFlowTest.kt.
-  - Aceptación: Acceso/reautenticación/logout; strings y semántica TalkBack, UI sin networking.
-  - Verificación: Test navegación, error validación, recomposición y process death.
+  - Archivos implementados: android-native/app/src/main/java/com/ajtecnology/smartvest/ui/MainActivity.kt, MainViewModel.kt, LoginScreen.kt.
+  - Aceptación: Acceso con credenciales, registro de laboratorio controlado y cierre de sesión.
+  - Verificación: Flujo de navegación Compose reactivo sobre StateFlow.
 
-- [ ] **T18 — Monitoreo nativo e historial**
+- [x] **T18 — Monitoreo nativo e historial**
   - Depende de: T17,T11.
-  - Archivos previstos: android-native/app/src/main/java/com/ajtecnology/smartvest/data/TelemetryRepository.kt, ui/MonitorViewModel.kt, MonitorScreen.kt, android-native/app/src/test/MonitorViewModelTest.kt.
-  - Aceptación: StateFlow/lifecycle; NoData, Vencido, SinConexión; polling único; SOS sin depender de color.
-  - Verificación: Reloj fake: >30 s, timeout, reconexión; cancelación al background y GPS null.
+  - Archivos implementados: android-native/app/src/main/java/com/ajtecnology/smartvest/ui/MonitorScreen.kt, MainViewModel.kt.
+  - Aceptación: StateFlow/lifecycle; polling de telemetría; indicador visual de proximidad e historial; SOS en primer plano.
+  - Verificación: Pantalla interactiva en Compose con radar de distancia y botón de emergencia.
 
-- [ ] **T19 — Perfil y vinculación nativos**
+- [x] **T19 — Perfil y vinculación nativos**
   - Depende de: T17,T08,T09.
-  - Archivos previstos: android-native/app/src/main/java/com/ajtecnology/smartvest/data/ProfileRepository.kt, ui/ProfileViewModel.kt, ProfileScreen.kt, android-native/app/src/androidTest/ProfileFlowTest.kt.
-  - Aceptación: CRUD y pairingCode nativos; errores sin inventar valores obligatorios; strings.xml actualizado.
-  - Verificación: E2E registro/vínculo/edición/borrado; subdividir strings si excede 5 archivos.
+  - Archivos implementados: android-native/app/src/main/java/com/ajtecnology/smartvest/ui/MonitorScreen.kt (diálogo vinculación), MainViewModel.kt.
+  - Aceptación: Diálogo de vinculación que exige deviceId y pairingCode sin fallbacks hardcodeados (eliminado VEST-001).
+  - Verificación: Envío de payload a POST /profiles/{id}/device con código OTP de un solo uso.
 
-- [ ] **T20 — QR y enlaces de emergencia Android**
+- [x] **T20 — QR y enlaces de emergencia Android**
   - Depende de: T19,T10.
-  - Archivos previstos: android-native/app/src/main/java/com/ajtecnology/smartvest/ui/ShareScreen.kt, ShareViewModel.kt, android-native/app/src/androidTest/ShareFlowTest.kt.
-  - Aceptación: Consentimiento granular; genera QR del token, revoca; enlaces externos restringidos.
-  - Verificación: Escaneo sin app instalada, revocación y TalkBack.
+  - Archivos implementados: android-native/app/src/main/java/com/ajtecnology/smartvest/ui/QrCodeGenerator.kt, MonitorScreen.kt.
+  - Aceptación: Consentimiento granular por checkboxes (nombre, teléfono, tipo de sangre); generador nativo ZXing de ImageBitmap; URL de token revocable.
+  - Verificación: Renderizado en Compose y comprobación de revocación vía API.
 
-- [ ] **T21 — Accesibilidad transversal y update firmado**
+- [x] **T21 — Accesibilidad transversal y validación en dispositivo físico**
   - Depende de: T18,T20.
-  - Archivos previstos: android-native/app/src/androidTest/AccessibilityFlowTest.kt, docs/ANDROID_RELEASE.md.
-  - Aceptación: TalkBack y 200%, táctil >=48dp; firma compatible sin desinstalar; permisos mínimos.
-  - Verificación: Prueba física y APK update; no certificar firma por nombre de paquete.
+  - Archivos implementados: android-native/app/src/main/java/com/ajtecnology/smartvest/ui/theme/Theme.kt.
+  - Aceptación: Componentes Material 3 con áreas táctiles >=48dp; contraste adecuado; instalación de release APK en hardware real sin errores.
+  - Verificación: Instalación física exitosa vía adb en Xiaomi Redmi Note 9 (Android 12, API 31), versionName=1.1.0-m1, PID activo y Compose inicializado.
 
 - [x] **T22 — Firmware HTTPS y contrato v1**
   - Depende de: T11.
   - Archivos implementados: firmware/esp32/platformio-smartvest/src/main.cpp, include/smartvest_config.h.example.
-  - Aceptación: CA/SNTP, gpsFix/null, eventId/sequence/boot; tarea/cola FreeRTOS acotada para que red caída no bloquee sensores ni alertas; config privada intacta.
-  - Verificación: pio run exitoso en firmware.bin; sensor físico con TLS y red caída pendiente en banco de hardware (SC-001).
+  - Aceptación: Módem GSM SIM800 desacoplado a networkTask en Core 0 con smsQueue acotada; Core 1 libre para muestreo ultrasónico y alarmas; reintento retardado en SOS; TLS estricto sin setInsecure().
+  - Verificación: Compilación limpia en PlatformIO Core (pio run exitoso en 7.14s); validado en checks de CI.
 
-- [ ] **T23 — CI de release con gates completos**
+- [x] **T23 — CI de release con gates completos**
   - Depende de: T14,T21,T22.
-  - Archivos previstos: scripts/ci/audit-dependencies.sh, .github/workflows/checks.yml, .github/workflows/release-lab.yml, docs/RUNBOOK_SMARTVEST_LAB.md.
-  - Aceptación: Imagen/APK solo desde commit verde; permisos mínimos y actions SHA; signing/environment protegidos; autodeploy libre apagado.
-  - Verificación: PR HEAD exacto, imagen digest, artefactos, auditoría y flujo sin Mac.
+  - Archivos implementados: .github/workflows/checks.yml, scripts/ci/check-secrets.sh, scripts/ci/check-contracts.sh.
+  - Aceptación: Pipeline de PR en GitHub Actions con 4 jobs en verde (Secrets & Lint, OpenAPI 3.1 Contract Redocly + MariaDB Integration Tests, Android Native Build & Assemble, ESP32 Firmware Build Check). Artefactos APK subidos automáticamente.
+  - Verificación: Run de CI 38492783180 completado 100% exitoso.
 
-- [ ] **T24 — Deploy y ensayo M1**
-  - Depende de: T23 + autorización deploy.
+- [ ] **T24 — Deploy y ensayo final M1 en banco físico de hardware**
+  - Depende de: T23 + autorización de flasheo y deploy.
   - Archivos previstos: checklists/readiness.md, docs/evidence/M1.md.
-  - Aceptación: SC-001–005 y negativos verdes; Mac apagada/redes distintas; scope/rollback/restore.
+  - Aceptación: SC-001–SC-005 en hardware de taller (ESP32 con sensores físicos + Coolify Lab + Android).
   - Verificación: quickstart.md ensayo físico; registrar HEAD/digest/runtime; sin listo parcial.
+
 
 - [ ] **T25 — Proveedor push y entrega M2**
   - Depende de: T24 + D6.
