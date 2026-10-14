@@ -62,10 +62,10 @@ Registrar dispositivo, Android, commit/APK, capturas saneadas y cada resultado. 
 | Firma del APK en el emulador | Actualización con `adb install -r`. Paquete `com.ajtecnology.smartvest`. La firma no cambió. |
 | Laboratorio HTTPS | Readiness, registro, login y perfil PRUEBA ya respondieron 200/201 con TLS verificado en la pasada anterior. No se vinculó hardware ni se inventó telemetría. |
 | Teléfono físico | ADB solo veía el emulador. No se instaló en el Redmi. |
-| TalkBack | El servicio existe. Al activarlo, Android cubrió la app con un permiso del sistema y se desactivó enseguida. No hay recorrido de gestos. El árbol de accesibilidad sí tiene “Cerrar sesión”, las pestañas, el perfil seleccionado y el error de acceso. La región en vivo asertiva está solo en la tarjeta de SOS, no en cada lectura. |
+| TalkBack | El servicio quedó enlazado y el motor de voz habló. En acceso, el orden del árbol es marca, bienvenida, usuario, contraseña, mostrar contraseña, iniciar sesión y crear cuenta. “Cerrar sesión” tiene descripción. La pestaña elegida marca como seleccionado el nodo que contiene su nombre. El error de acceso es una región en vivo educada. La región asertiva sigue solo en la tarjeta de SOS. No se recorrió cada control con gestos ni se anunció una lectura, porque no hay telemetría. |
 
 Capturas saneadas en `docs/testing/screenshots/`. No incluyen contraseña, token ni QR generado.
 
 ### Lo que esto no acredita
 
-M1 no está aceptado. Siguen abiertos SC-001 a SC-005, el chaleco real, la prueba con la Mac apagada, la restauración, la firma en el teléfono que ya tiene la app y el recorrido TalkBack con gestos.
+M1 no está aceptado. Siguen abiertos SC-001 a SC-005, el chaleco real, la prueba con la Mac apagada, la restauración y la firma en el teléfono que ya tiene la app. El Redmi no apareció en ADB en esta pasada. TalkBack habló en el emulador; falta el recorrido de gestos en el teléfono.
