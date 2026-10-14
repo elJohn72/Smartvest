@@ -27,3 +27,11 @@ Fecha de fijación: 2026-10-13
 - **Framework:** Arduino ESP32 (v2.0.17 / Espressif 7.1.3 PlatformIO)
 - **Toolchain:** PlatformIO Core 6.1.16+
 - **Seguridad:** WiFiClientSecure con validación de certificado TLS / CA Bundle (`esp_crt_bundle_attach`) y sincronización NTP antes de transferencias seguras.
+
+## Vercel fuera del despliegue M1
+
+John confirmó el 2026-10-13 que SmartVest M1 se desplegará en Coolify. `vercel.json` define `git.deploymentEnabled: false` para desactivar despliegues automáticos de la integración Git de Vercel en las ramas que contienen esta configuración. Los deployments anteriores permanecen como historial; no son validación de API PHP ni Android.
+
+No se eliminan proyectos, dominios ni la GitHub App global. Los jobs propios de GitHub Actions se conservan. Al fusionar este cambio, main también deja de lanzar deploys automáticos Vercel. GitHub no tenía protección de rama ni reglas efectivas que exigieran Vercel al comprobarlo. Esta decisión no configura Coolify ni autoriza merge/deploy.
+
+Referencia oficial: https://vercel.com/docs/project-configuration/git-configuration#gitdeploymentenabled
