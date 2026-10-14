@@ -52,7 +52,7 @@ SC-006/M2: probar SOS, evento duplicado, worker reiniciado y notificaciones dene
 ## Decisiones y validación de compuertas (M1 validado 2026-10-13)
 
 - **G0–G2**: Validados y autorizados por John para ejecución autónoma de M1.
-- **D1 (Dominio HTTPS)**: `smartvest-lab.ajenzasas.com` bajo Coolify / Traefik con Let's Encrypt TLS automático.
+- **D1 (Dirección HTTPS)**: John, 2026-10-14, no compra dominio. El laboratorio usa `https://smartvest.179.236.74.107.sslip.io` (el nombre incluye la IP del VPS y Let's Encrypt lo emite Coolify/Traefik). `smartvest-lab.ajenzasas.com` no está registrado y no se usa. Si cambia la IP del VPS, hay que cambiar este nombre.
 - **D2 (Acceso Coolify)**: Proyecto `SMARTVEST`, entorno `lab`, redes y volúmenes aislados; deploy vía GitHub Actions / webhook autenticado; panel por túnel SSH.
 - **D3 (Firma APK)**: Mantener `com.ajtecnology.smartvest`, versión 25, firmado con keystore debug existente para actualización compatible sin desinstalar.
 - **D4 (Campos públicos QR)**: Allowlist consentida: únicamente nombre de presentación, teléfono de emergencia y tipo de sangre (opcional). Bloqueo total de PII/GPS en público.

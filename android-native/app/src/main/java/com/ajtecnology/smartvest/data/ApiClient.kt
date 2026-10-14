@@ -13,7 +13,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ApiClient(
-    private val baseUrl: String = "https://smartvest-lab.ajenzasas.com/api/v1",
+    private val baseUrl: String = "https://smartvest.179.236.74.107.sslip.io/api/v1",
     private val sessionStore: SessionStore
 ) {
     private val client = OkHttpClient.Builder()

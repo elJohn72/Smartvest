@@ -498,7 +498,7 @@ if (preg_match('#^profiles/([^/]+)/shares$#', $path, $m) && $method === 'POST') 
         'fields' => json_encode(array_values($allowedFields)),
     ]);
 
-    $host = $_SERVER['HTTP_HOST'] ?? 'smartvest-lab.ajenzasas.com';
+    $host = $_SERVER['HTTP_HOST'] ?? 'smartvest.179.236.74.107.sslip.io';
     $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'https';
     $publicUrl = "{$scheme}://{$host}/emergency/{$token}";
 
