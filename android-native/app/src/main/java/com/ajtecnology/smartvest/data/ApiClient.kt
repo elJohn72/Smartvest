@@ -24,6 +24,14 @@ class ApiClient(
     private val json = Json { ignoreUnknownKeys = true }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
+    private fun httpFailure(code: Int): IOException {
+        if (code == 401) {
+            sessionStore.clearSession()
+            return IOException("UNAUTHORIZED")
+        }
+        return IOException("Error HTTP $code")
+    }
+
     suspend fun register(request: RegisterRequest): Result<RegisterResponse> = withContext(Dispatchers.IO) {
         try {
             val body = json.encodeToString(request).toRequestBody(jsonMediaType)
@@ -37,8 +45,10 @@ class ApiClient(
                     val respBody = response.body?.string() ?: ""
                     val registerResponse = json.decodeFromString<RegisterResponse>(respBody)
                     Result.success(registerResponse)
+                } else if (response.code == 401) {
+                    Result.failure(IOException("Usuario o contraseña incorrectos."))
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -62,8 +72,10 @@ class ApiClient(
                     val loginResponse = json.decodeFromString<LoginResponse>(respBody)
                     sessionStore.saveToken(loginResponse.token)
                     Result.success(loginResponse)
+                } else if (response.code == 401) {
+                    Result.failure(IOException("Usuario o contraseña incorrectos."))
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -88,7 +100,7 @@ class ApiClient(
                     val listResp = json.decodeFromString<ProfileListResponse>(respBody)
                     Result.success(listResp.data)
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -114,7 +126,31 @@ class ApiClient(
                     val createResp = json.decodeFromString<ProfileCreateResponse>(respBody)
                     Result.success(createResp)
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProfile(profileId: String, request: ProfileCreateRequest): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val token = sessionStore.getToken() ?: return@withContext Result.failure(IllegalStateException("No auth token"))
+            val body = json.encodeToString(request).toRequestBody(jsonMediaType)
+            val httpRequest = Request.Builder()
+                .url("$baseUrl/profiles/$profileId")
+                .header("Authorization", "Bearer $token")
+                .patch(body)
+                .build()
+
+            client.newCall(httpRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -137,7 +173,7 @@ class ApiClient(
                 if (response.isSuccessful) {
                     Result.success(Unit)
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -161,11 +197,8 @@ class ApiClient(
                     val respBody = response.body?.string() ?: ""
                     val stateResp = json.decodeFromString<TelemetryStateResponse>(respBody)
                     Result.success(stateResp.data)
-                } else if (response.code == 401) {
-                    sessionStore.clearSession()
-                    Result.failure(IOException("UNAUTHORIZED"))
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -190,7 +223,7 @@ class ApiClient(
                     val histResp = json.decodeFromString<TelemetryHistoryResponse>(respBody)
                     Result.success(histResp.data)
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -215,7 +248,7 @@ class ApiClient(
                 if (response.isSuccessful) {
                     Result.success(true)
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -242,7 +275,7 @@ class ApiClient(
                     val shareResp = json.decodeFromString<ShareCreateResponse>(respBody)
                     Result.success(shareResp)
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {
@@ -265,7 +298,7 @@ class ApiClient(
                 if (response.isSuccessful) {
                     Result.success(Unit)
                 } else {
-                    Result.failure(IOException("Error HTTP ${response.code}"))
+                    Result.failure(httpFailure(response.code))
                 }
             }
         } catch (e: CancellationException) {

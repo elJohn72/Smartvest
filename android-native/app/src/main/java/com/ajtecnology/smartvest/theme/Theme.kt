@@ -1,5 +1,8 @@
 package com.ajtecnology.smartvest.theme
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 val Night = Color(0xFF0F172A)
@@ -19,3 +22,24 @@ val WarnOrange = Color(0xFFC2410C)
 val WarnSoft = Color(0xFFFFEDD5)
 val SosRed = Color(0xFFB91C1C)
 val SosSoft = Color(0xFFFEE2E2)
+
+private val SmartVestColors = lightColorScheme(
+    primary = Signal,
+    onPrimary = Color.White,
+    secondary = Pulse,
+    onSecondary = Color.White,
+    background = Paper,
+    onBackground = Night,
+    surface = CardBg,
+    onSurface = BodyText,
+    error = SosRed,
+    onError = Color.White
+)
+
+@Composable
+fun SmartVestTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = SmartVestColors,
+        content = content
+    )
+}
