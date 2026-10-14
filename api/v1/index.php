@@ -10,6 +10,8 @@ header('Cache-Control: no-store, private');
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../lib/session.php';
 require_once __DIR__ . '/../lib/authorization.php';
+require_once __DIR__ . '/../lib/rate_limit.php';
+require_once __DIR__ . '/../lib/telemetry_payload.php';
 
 use SmartVest\Lib\SessionManager;
 use SmartVest\Lib\Authorization;
@@ -41,7 +43,7 @@ if (($path === 'health/ready' || $uri === '/health/ready') && $method === 'GET')
         exit;
     } catch (\Throwable $e) {
         http_response_code(503);
-        echo json_encode(['status' => 'error', 'message' => 'Base de datos o migraciones no disponibles: ' . $e->getMessage()]);
+        echo json_encode(['status' => 'error', 'message' => 'Base de datos o migraciones no disponibles.']);
         exit;
     }
 }
@@ -145,13 +147,38 @@ header('Content-Type: application/json; charset=utf-8');
 // 4. AUTENTICACIÓN: REGISTER / LOGIN / LOGOUT / ME
 // ==============================================================================
 if ($path === 'auth/register' && $method === 'POST') {
+    if (!smartvest_registration_enabled()) {
+        http_response_code(403);
+        echo json_encode(['error' => ['code' => 'REGISTRATION_DISABLED', 'message' => 'El registro de laboratorio está deshabilitado.']]);
+        exit;
+    }
+
+    $cap = smartvest_env_int('SMARTVEST_LAB_ACCOUNT_CAP', 100);
+    $countStmt = $pdo->query('SELECT COUNT(*) FROM accounts');
+    $accountCount = (int)$countStmt->fetchColumn();
+    if ($accountCount >= $cap) {
+        http_response_code(403);
+        echo json_encode(['error' => ['code' => 'LAB_CAP_REACHED', 'message' => 'Se alcanzó el cupo de cuentas de laboratorio.']]);
+        exit;
+    }
+
+    $retryAfter = smartvest_rate_gate(
+        $pdo,
+        'register',
+        smartvest_client_address(),
+        smartvest_env_int('SMARTVEST_REGISTER_MAX_PER_WINDOW', 8),
+        smartvest_env_int('SMARTVEST_REGISTER_WINDOW_SECONDS', 3600),
+        true
+    );
+    smartvest_rate_limit_response($retryAfter);
+
     $data = read_json_body();
     $username = trim((string)($data['username'] ?? ''));
     $password = (string)($data['password'] ?? '');
 
-    if (strlen($username) < 3 || strlen($password) < 8) {
+    if (strlen($username) < 3 || strlen($username) > 64 || strlen($password) < 8 || strlen($password) > 128) {
         http_response_code(400);
-        echo json_encode(['error' => ['code' => 'INVALID_PAYLOAD', 'message' => 'Usuario (min 3) o contraseña (min 8) no válidos.']]);
+        echo json_encode(['error' => ['code' => 'INVALID_PAYLOAD', 'message' => 'Usuario (3–64) o contraseña (8–128) no válidos.']]);
         exit;
     }
 
@@ -177,17 +204,40 @@ if ($path === 'auth/login' && $method === 'POST') {
     $data = read_json_body();
     $username = trim((string)($data['username'] ?? ''));
     $password = (string)($data['password'] ?? '');
+    $loginSubject = strtolower($username);
+
+    $blocked = smartvest_rate_gate(
+        $pdo,
+        'login',
+        $loginSubject,
+        smartvest_env_int('SMARTVEST_LOGIN_MAX_ATTEMPTS', 8),
+        smartvest_env_int('SMARTVEST_LOGIN_WINDOW_SECONDS', 900),
+        false
+    );
+    smartvest_rate_limit_response($blocked);
 
     $stmt = $pdo->prepare('SELECT id, password_hash, status FROM accounts WHERE username = :u');
     $stmt->execute(['u' => $username]);
     $account = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$account || !password_verify($password, $account['password_hash']) || $account['status'] !== 'active') {
+        $retryAfter = smartvest_rate_gate(
+            $pdo,
+            'login',
+            $loginSubject,
+            smartvest_env_int('SMARTVEST_LOGIN_MAX_ATTEMPTS', 8),
+            smartvest_env_int('SMARTVEST_LOGIN_WINDOW_SECONDS', 900),
+            true
+        );
+        if ($retryAfter !== null) {
+            smartvest_rate_limit_response($retryAfter);
+        }
         http_response_code(401);
         echo json_encode(['error' => ['code' => 'UNAUTHORIZED', 'message' => 'Credenciales inválidas.']]);
         exit;
     }
 
+    smartvest_rate_clear($pdo, 'login', $loginSubject);
     $token = $sessionManager->createSession($account['id']);
     echo json_encode([
         'token' => $token,
@@ -484,7 +534,13 @@ if (preg_match('#^profiles/([^/]+)/shares/([^/]+)$#', $path, $m) && $method === 
 // ==============================================================================
 if ((preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) || $path === 'telemetry') && $method === 'POST') {
     $data = read_json_body();
-    $deviceId = isset($m[1]) ? $m[1] : trim((string)($data['deviceId'] ?? ''));
+    $validated = smartvest_validate_telemetry($data, isset($m[1]) ? $m[1] : null);
+    if (isset($validated['error'])) {
+        http_response_code(400);
+        echo json_encode(['error' => ['code' => 'INVALID_PAYLOAD', 'message' => $validated['error']]]);
+        exit;
+    }
+    $deviceId = $validated['deviceId'];
     $apiKey = $_SERVER['HTTP_X_SMARTVEST_API_KEY'] ?? '';
 
     // Validar credencial del dispositivo
@@ -498,22 +554,15 @@ if ((preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) || $path === 'teleme
         exit;
     }
 
-    $bootId = trim((string)($data['bootId'] ?? ''));
-    $seq = isset($data['sequence']) ? (int)$data['sequence'] : -1;
-    $sos = !empty($data['sosActive']);
-    $sosEventId = isset($data['sosEventId']) ? trim((string)$data['sosEventId']) : null;
-
-    if ($bootId === '' || $seq < 0) {
-        http_response_code(400);
-        echo json_encode(['error' => ['code' => 'INVALID_PAYLOAD', 'message' => 'bootId y sequence (>= 0) son obligatorios.']]);
-        exit;
-    }
-
-    $distance = isset($data['distanceCm']) ? (float)$data['distanceCm'] : null;
-    $gpsFix = !empty($data['gpsFix']);
-    $lat = $gpsFix && isset($data['latitude']) ? (float)$data['latitude'] : null;
-    $lng = $gpsFix && isset($data['longitude']) ? (float)$data['longitude'] : null;
-    $battery = isset($data['batteryLevel']) ? (int)$data['batteryLevel'] : null;
+    $bootId = $validated['bootId'];
+    $seq = $validated['sequence'];
+    $sos = $validated['sosActive'];
+    $sosEventId = $validated['sosEventId'];
+    $distance = $validated['distanceCm'];
+    $gpsFix = $validated['gpsFix'];
+    $lat = $validated['latitude'];
+    $lng = $validated['longitude'];
+    $battery = $validated['batteryLevel'];
 
     $pdo->beginTransaction();
 
@@ -668,7 +717,7 @@ if ((preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) || $path === 'teleme
     } catch (\Throwable $e) {
         $pdo->rollBack();
         http_response_code(500);
-        echo json_encode(['error' => ['code' => 'TRANSACTION_ERROR', 'message' => 'Error al persistir telemetría: ' . $e->getMessage()]]);
+        echo json_encode(['error' => ['code' => 'TRANSACTION_ERROR', 'message' => 'Error al persistir telemetría.']]);
         exit;
     }
 }

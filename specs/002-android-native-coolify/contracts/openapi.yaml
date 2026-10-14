@@ -63,8 +63,12 @@ paths:
           description: Cuenta de laboratorio creada
         '400':
           description: Datos inválidos
+        '403':
+          description: Registro deshabilitado o cupo de laboratorio alcanzado
         '409':
           description: Usuario ya existe
+        '429':
+          description: Demasiados registros en la ventana. Incluye Retry-After.
 
   /auth/login:
     post:
@@ -93,6 +97,8 @@ paths:
                   expiresAt: { type: string, format: date-time }
         '401':
           description: Credenciales inválidas
+        '429':
+          description: Demasiados intentos de acceso. Incluye Retry-After y no bloquea de forma indefinida.
 
   /auth/logout:
     post:

@@ -122,6 +122,22 @@ jobs:
         working-directory: firmware/esp32/platformio-smartvest
         run: cp include/smartvest_config.h.example include/smartvest_config.h
 
+      - name: Host test for SOS outbox policy
+        run: |
+          g++ -std=c++17 -I firmware/esp32/platformio-smartvest/include \
+            tests/firmware/telemetry_outbox_test.cpp -o /tmp/telemetry_outbox_test
+          /tmp/telemetry_outbox_test
+
       - name: Compile ESP32 Firmware
         working-directory: firmware/esp32/platformio-smartvest
         run: pio run
+
+  coolify_stack:
+    name: Coolify Nginx PHP-FPM MariaDB Stack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Exercise the real lab containers
+        run: bash tests/coolify_stack_test.sh

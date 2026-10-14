@@ -11,6 +11,8 @@ services:
       - DB_USER=smartvest_user
       - DB_PASSWORD=smartvest_lab_password
       - TZ=UTC
+    ports:
+      - "${SMARTVEST_LAB_HTTP_PORT:-18080}:80"
     networks:
       - smartvest-lab-net
     depends_on:

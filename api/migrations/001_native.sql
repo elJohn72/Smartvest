@@ -112,3 +112,11 @@ CREATE TABLE IF NOT EXISTS device_boots (
     INDEX idx_device_epoch (device_id, boot_epoch),
     CONSTRAINT fk_device_boots_device FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+    scope VARCHAR(32) NOT NULL,
+    subject_hash CHAR(64) NOT NULL,
+    window_started_at INT UNSIGNED NOT NULL,
+    attempt_count INT UNSIGNED NOT NULL,
+    PRIMARY KEY (scope, subject_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

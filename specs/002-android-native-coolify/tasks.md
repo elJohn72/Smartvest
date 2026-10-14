@@ -143,6 +143,12 @@ Rutas debajo de contracts/ son relativas a esta feature; demás rutas, a la raí
   - Aceptación: Pipeline de PR en GitHub Actions con 4 jobs en verde (Secrets & Lint, OpenAPI 3.1 Contract Redocly + MariaDB Integration Tests, Android Native Build & Assemble, ESP32 Firmware Build Check). Artefactos APK subidos automáticamente.
   - Verificación: Run de CI 38492783180 completado 100% exitoso.
 
+- [x] **T27 — SOS, límite de acceso y pila real de laboratorio**
+  - Depende de: T11, T13, T22, T23.
+  - Archivos implementados: firmware/esp32/platformio-smartvest/src/main.cpp, include/telemetry_outbox.h, api/v1/index.php, api/lib/rate_limit.php, api/lib/telemetry_payload.php, api/migrations/001_native.sql, tests/api_integration_test.php, tests/firmware/telemetry_outbox_test.cpp, tests/coolify_stack_test.sh, infra/smartvest/compose.lab.yml, .github/workflows/checks.yml.
+  - Aceptación: el SOS se captura en el flanco y no se da por entregado ante 429/500; una cola llena no borra un SOS; login y registro responden 429 con ventana que vuelve a abrir; la telemetría rechaza tipos inválidos; Nginx/PHP-FPM/MariaDB se prueban aparte de php -S.
+  - Verificación: prueba de host, suite HTTP y job de la pila. No acredita SC-001–SC-005 en hardware.
+
 - [ ] **T24 — Deploy y ensayo final M1 en banco físico de hardware**
   - Depende de: T23 + autorización de flasheo y deploy.
   - Archivos previstos: checklists/readiness.md, docs/evidence/M1.md.

@@ -43,17 +43,19 @@ $baseUrl = "http://$host:$port";
 
 // Iniciar servidor web PHP embebido en segundo plano
 $cmd = sprintf(
-    'php -S %s:%d %s/router_lab.php > /dev/null 2>&1 & echo $!',
-    $host,
-    $port,
-    __DIR__
+    'php -S %s %s > /dev/null 2>&1 & echo $!',
+    escapeshellarg($host . ':' . $port),
+    escapeshellarg(__DIR__ . '/router_lab.php')
 );
 $pid = (int)shell_exec($cmd);
+$extraPids = [];
 
-register_shutdown_function(function() use ($pid) {
-    if ($pid > 0) {
-        @posix_kill($pid, SIGTERM);
-        @posix_kill($pid, SIGKILL);
+register_shutdown_function(function() use ($pid, &$extraPids) {
+    foreach (array_merge([$pid], $extraPids) as $serverPid) {
+        if ($serverPid > 0) {
+            @posix_kill($serverPid, SIGTERM);
+            @posix_kill($serverPid, SIGKILL);
+        }
     }
 });
 
@@ -74,40 +76,77 @@ if (!$started) {
     exit(1);
 }
 
-function http_request(string $method, string $path, array $headers = [], ?array $body = null): array {
+function http_request(string $method, string $path, array $headers = [], ?array $body = null, ?string $rawBody = null, ?string $base = null): array {
     global $baseUrl;
-    $url = $baseUrl . $path;
+    $url = ($base ?? $baseUrl) . $path;
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-    curl_setopt($ch, CURLOPT_HEADER, false);
+    curl_setopt($ch, CURLOPT_HEADER, true);
 
     $formattedHeaders = [];
     foreach ($headers as $k => $v) {
         $formattedHeaders[] = "$k: $v";
     }
 
-    if ($body !== null) {
+    if ($rawBody !== null || $body !== null) {
         $formattedHeaders[] = 'Content-Type: application/json';
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $rawBody ?? json_encode($body));
     }
 
     curl_setopt($ch, CURLOPT_HTTPHEADER, $formattedHeaders);
     $response = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $headerSize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+
+    $raw = $response === false ? '' : (string)$response;
+    $headerText = substr($raw, 0, $headerSize);
+    $responseBody = substr($raw, $headerSize);
+    $retryAfter = null;
+    if (preg_match('/^Retry-After:\s*(\d+)/mi', $headerText, $retryMatch)) {
+        $retryAfter = (int)$retryMatch[1];
+    }
 
     $json = null;
-    if ($response !== false && $response !== '') {
-        $json = json_decode((string)$response, true);
+    if ($responseBody !== '') {
+        $json = json_decode($responseBody, true);
     }
 
     return [
         'status' => $status,
-        'body' => $response,
+        'body' => $responseBody,
         'json' => $json,
+        'retry_after' => $retryAfter,
     ];
+}
+
+function start_php_server(int $port, array $env): int {
+    $prefix = '';
+    foreach ($env as $name => $value) {
+        $prefix .= $name . '=' . escapeshellarg((string)$value) . ' ';
+    }
+    $cmd = sprintf(
+        '%sphp -S %s %s > /dev/null 2>&1 & echo $!',
+        $prefix,
+        escapeshellarg('127.0.0.1:' . $port),
+        escapeshellarg(__DIR__ . '/router_lab.php')
+    );
+    $pid = (int)shell_exec($cmd);
+    $started = false;
+    for ($i = 0; $i < 30; $i++) {
+        usleep(100000);
+        $conn = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
+        if ($conn) {
+            fclose($conn);
+            $started = true;
+            break;
+        }
+    }
+    if (!$started) {
+        throw new RuntimeException("No arrancó el servidor de pruebas en el puerto $port");
+    }
+    return $pid;
 }
 
 echo "=== INICIANDO PRUEBAS HTTP DE INTEGRACIÓN SMARTVEST API v1 ===\n";
@@ -356,6 +395,97 @@ assert_true(in_array($revokeResp['status'], [200, 204]), 'Revocación del share 
 // Consulta pública posterior a la revocación -> 404
 $emergencyAfterRevoke = http_request('GET', "/api/v1/public/emergency/$tokenPart");
 assert_equals(404, $emergencyAfterRevoke['status'], 'Share revocado debe responder 404');
+
+echo "8. Probando rechazo de telemetría con tipos o rangos inválidos...\n";
+$invalidBodies = [
+    '{"deviceId":"VEST-LAB-02","bootId":"' . $bootB . '","sequence":2,"gpsFix":false,"sosActive":false}' => 'deviceId del cuerpo no coincide con la ruta',
+    '{"deviceId":"' . $dev1 . '","bootId":"' . $bootB . '","sequence":"10","gpsFix":false,"sosActive":false}' => 'sequence debe ser entero',
+    '{"deviceId":"' . $dev1 . '","bootId":"' . $bootB . '","sequence":2,"gpsFix":false,"sosActive":"true"}' => 'sosActive debe ser booleano',
+    '{"deviceId":"' . $dev1 . '","bootId":"' . $bootB . '","sequence":2,"gpsFix":true,"sosActive":false}' => 'gpsFix exige coordenadas',
+    '{"deviceId":"' . $dev1 . '","bootId":"' . $bootB . '","sequence":2,"gpsFix":false,"latitude":1,"longitude":2,"sosActive":false}' => 'sin fix las coordenadas son null',
+    '{"deviceId":"' . $dev1 . '","bootId":"' . $bootB . '","sequence":2,"gpsFix":false,"batteryLevel":150,"sosActive":false}' => 'batería fuera de rango',
+    '{"deviceId":"' . $dev1 . '","bootId":"' . $bootB . '","sequence":2,"gpsFix":false,"sosActive":true}' => 'SOS exige sosEventId',
+];
+$mismatchPath = "/api/v1/devices/$dev1/telemetry";
+$firstInvalid = true;
+foreach ($invalidBodies as $rawBody => $reason) {
+    $pathForBody = $firstInvalid ? $mismatchPath : '/api/v1/telemetry';
+    $firstInvalid = false;
+    $rejected = http_request('POST', $pathForBody, $telemetryHeaders, null, $rawBody);
+    assert_equals(400, $rejected['status'], "Debe rechazar $reason");
+    assert_equals('INVALID_PAYLOAD', $rejected['json']['error']['code'] ?? null, "El contrato usa INVALID_PAYLOAD para $reason");
+}
+$stateAfterInvalid = http_request('GET', "/api/v1/devices/$dev1/state", ['Authorization' => "Bearer $tokenA"]);
+assert_equals($bootB, $stateAfterInvalid['json']['data']['bootId'], 'Una telemetría inválida no cambia el boot');
+assert_equals(true, $stateAfterInvalid['json']['data']['sosActive'], 'Una telemetría inválida no apaga el SOS');
+
+$wrongKey = http_request('POST', '/api/v1/telemetry', ['X-SmartVest-Api-Key' => 'clave-incorrecta'], [
+    'deviceId' => $dev1,
+    'bootId' => $bootB,
+    'sequence' => 2,
+    'gpsFix' => false,
+    'sosActive' => false,
+]);
+assert_equals(401, $wrongKey['status'], 'Una clave de dispositivo incorrecta responde 401');
+
+echo "9. Probando límite de acceso y registro de laboratorio...\n";
+$rateUser = 'caregiver_rate_' . bin2hex(random_bytes(4));
+$rateReg = http_request('POST', '/api/v1/auth/register', [], ['username' => $rateUser, 'password' => $password]);
+assert_equals(201, $rateReg['status'], 'El usuario de límite de acceso debe registrarse');
+for ($attempt = 1; $attempt <= 7; $attempt++) {
+    $failed = http_request('POST', '/api/v1/auth/login', [], ['username' => $rateUser, 'password' => 'incorrecta']);
+    assert_equals(401, $failed['status'], "El intento $attempt debe ser 401");
+}
+$eighth = http_request('POST', '/api/v1/auth/login', [], ['username' => $rateUser, 'password' => 'incorrecta']);
+$ninth = http_request('POST', '/api/v1/auth/login', [], ['username' => $rateUser, 'password' => $password]);
+assert_equals(429, $eighth['status'], 'El octavo intento de acceso responde 429');
+assert_equals(429, $ninth['status'], 'El noveno intento sigue en 429 dentro de la ventana');
+assert_true(($eighth['retry_after'] ?? 0) > 0, '429 incluye Retry-After');
+assert_equals('RATE_LIMITED', $eighth['json']['error']['code'] ?? null, 'El código de límite es RATE_LIMITED');
+$pdo->prepare('UPDATE auth_rate_limits SET window_started_at = 0 WHERE scope = "login"')->execute();
+$afterWindow = http_request('POST', '/api/v1/auth/login', [], ['username' => $rateUser, 'password' => 'incorrecta']);
+assert_equals(401, $afterWindow['status'], 'Al vencer la ventana el acceso no queda bloqueado para siempre');
+$rateLogin = http_request('POST', '/api/v1/auth/login', [], ['username' => $rateUser, 'password' => $password]);
+assert_equals(200, $rateLogin['status'], 'Un acceso correcto limpia el contador y entra');
+
+$createdBeforeLimit = 0;
+$sawRegisterLimit = false;
+for ($attempt = 1; $attempt <= 12; $attempt++) {
+    $extraUser = 'caregiver_cap_' . $attempt . '_' . bin2hex(random_bytes(2));
+    $extra = http_request('POST', '/api/v1/auth/register', [], ['username' => $extraUser, 'password' => $password]);
+    if ($extra['status'] === 201) {
+        $createdBeforeLimit++;
+        continue;
+    }
+    assert_equals(429, $extra['status'], 'El registro que llena la ventana responde 429');
+    assert_true(($extra['retry_after'] ?? 0) > 0, 'El 429 de registro incluye Retry-After');
+    $sawRegisterLimit = true;
+    break;
+}
+assert_true($sawRegisterLimit, 'El registro de laboratorio debe alcanzar 429');
+assert_true($createdBeforeLimit >= 1 && $createdBeforeLimit < 12, 'La ventana permite registros y luego se detiene');
+$pdo->prepare('UPDATE auth_rate_limits SET window_started_at = 0 WHERE scope = "register"')->execute();
+$registerAfterWindow = http_request('POST', '/api/v1/auth/register', [], [
+    'username' => 'caregiver_after_' . bin2hex(random_bytes(3)),
+    'password' => $password,
+]);
+assert_equals(201, $registerAfterWindow['status'], 'Al vencer la ventana el registro vuelve a estar disponible');
+
+$extraPids[] = start_php_server(8901, ['SMARTVEST_LAB_REGISTRATION' => '0']);
+$disabled = http_request('POST', '/api/v1/auth/register', [], [
+    'username' => 'caregiver_off_' . bin2hex(random_bytes(3)),
+    'password' => $password,
+], null, 'http://127.0.0.1:8901');
+assert_equals(403, $disabled['status'], 'El registro deshabilitado responde 403');
+assert_equals('REGISTRATION_DISABLED', $disabled['json']['error']['code'] ?? null, 'El código es REGISTRATION_DISABLED');
+
+$extraPids[] = start_php_server(8902, ['SMARTVEST_LAB_ACCOUNT_CAP' => '2']);
+$capped = http_request('POST', '/api/v1/auth/register', [], [
+    'username' => 'caregiver_over_' . bin2hex(random_bytes(3)),
+    'password' => $password,
+], null, 'http://127.0.0.1:8902');
+assert_equals(403, $capped['status'], 'El cupo de laboratorio responde 403');
+assert_equals('LAB_CAP_REACHED', $capped['json']['error']['code'] ?? null, 'El código es LAB_CAP_REACHED');
 
 echo "✅ TODAS LAS PRUEBAS HTTP DE INTEGRACIÓN Y SEGURIDAD PASARON EXITOSAMENTE.\n";
 exit(0);

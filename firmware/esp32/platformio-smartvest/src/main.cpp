@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "telemetry_outbox.h"
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -134,6 +135,13 @@ struct SmsMessage {
 static QueueHandle_t telemetryQueue = nullptr;
 static QueueHandle_t smsQueue = nullptr;
 static TaskHandle_t networkTaskHandle = nullptr;
+static portMUX_TYPE sosMux = portMUX_INITIALIZER_UNLOCKED;
+static SosPending sosPolicy{};
+static TelemetryMessage sosHeld{};
+static bool sosHeldValid = false;
+static int sosBackoffMs = 2000;
+static unsigned long sosNextAttemptMs = 0;
+static constexpr int kSosPermanentLimit = 3;
 
 float measureDistanceCm();
 float measureDistanceCmFiltered();
@@ -149,7 +157,10 @@ void updateBatteryLevel();
 void ensureWifiConnection();
 void enqueueTelemetryMessage();
 void networkTask(void* pvParameters);
-void sendTelemetryHttp(const TelemetryMessage& msg);
+TelemetryHttpClass sendTelemetryHttp(const TelemetryMessage& msg);
+void makeEventId(char* out, size_t outLen);
+void fillTelemetryMessage(TelemetryMessage& msg, unsigned long sequence, bool sosActive, const char* eventId);
+void captureSosEdge();
 void printTelemetry();
 bool sendSms(const String& message);
 bool sendAtCommand(const char* command, const char* expected, unsigned long timeoutMs);
@@ -247,6 +258,7 @@ void loop() {
   sosPressed = digitalRead(Pins::sos) == LOW;
   if (sosPressed && !sosEdgeLatched) {
     sosEdgeLatched = true;
+    captureSosEdge();
 
     if (SMARTVEST_ENABLE_SIM800 && smsQueue != nullptr) {
       SmsMessage smsMsg;
@@ -274,6 +286,7 @@ void loop() {
 
   if (!sosPressed) {
     sosEdgeLatched = false;
+    sos_note_release(&sosPolicy);
   }
 
   if (sosPressed) {
@@ -502,82 +515,156 @@ void ensureWifiConnection() {
   WiFi.begin(SMARTVEST_WIFI_SSID, SMARTVEST_WIFI_PASSWORD);
 }
 
-void enqueueTelemetryMessage() {
-  if (telemetryQueue == nullptr) return;
-
-  telemetrySequence++;
-
-  // Generar o limpiar sosEventId si SOS está activo
-  if (sosPressed && strlen(currentSosEventId) == 0) {
-    uint8_t randBytes[16];
-    for (int i = 0; i < 16; i += 4) {
-      uint32_t r = esp_random();
-      memcpy(&randBytes[i], &r, 4);
-    }
-    randBytes[6] = (randBytes[6] & 0x0F) | 0x40;
-    randBytes[8] = (randBytes[8] & 0x3F) | 0x80;
-    snprintf(currentSosEventId, sizeof(currentSosEventId),
-             "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-             randBytes[0], randBytes[1], randBytes[2], randBytes[3],
-             randBytes[4], randBytes[5], randBytes[6], randBytes[7],
-             randBytes[8], randBytes[9], randBytes[10], randBytes[11],
-             randBytes[12], randBytes[13], randBytes[14], randBytes[15]);
-  } else if (!sosPressed) {
-    currentSosEventId[0] = '\0';
+void makeEventId(char* out, size_t outLen) {
+  uint8_t randBytes[16];
+  for (int i = 0; i < 16; i += 4) {
+    uint32_t r = esp_random();
+    memcpy(&randBytes[i], &r, 4);
   }
+  randBytes[6] = (randBytes[6] & 0x0F) | 0x40;
+  randBytes[8] = (randBytes[8] & 0x3F) | 0x80;
+  snprintf(out, outLen,
+           "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+           randBytes[0], randBytes[1], randBytes[2], randBytes[3],
+           randBytes[4], randBytes[5], randBytes[6], randBytes[7],
+           randBytes[8], randBytes[9], randBytes[10], randBytes[11],
+           randBytes[12], randBytes[13], randBytes[14], randBytes[15]);
+}
 
-  TelemetryMessage msg;
-  msg.sequence = telemetrySequence;
+void fillTelemetryMessage(TelemetryMessage& msg, unsigned long sequence, bool activeSos, const char* eventId) {
+  msg.sequence = sequence;
   msg.distanceCm = currentDistanceCm;
   msg.gpsFix = gpsState.fix;
   msg.latitude = gpsState.latitude;
   msg.longitude = gpsState.longitude;
   msg.batteryLevel = batteryLevel;
-  msg.sosActive = sosPressed;
-  strncpy(msg.sosEventId, currentSosEventId, sizeof(msg.sosEventId));
+  msg.sosActive = activeSos;
+  if (eventId != nullptr) {
+    strncpy(msg.sosEventId, eventId, sizeof(msg.sosEventId) - 1);
+  } else {
+    msg.sosEventId[0] = '\0';
+  }
   msg.sosEventId[sizeof(msg.sosEventId) - 1] = '\0';
+}
 
-  // Si la cola está llena, descartar paquetes ordinarios para no acumular latencia,
-  // pero NUNCA descartar paquetes con SOS activo
+void captureSosEdge() {
+  char eventId[40] = {0};
+  makeEventId(eventId, sizeof(eventId));
+  uint32_t sequence = static_cast<uint32_t>(telemetrySequence);
+  portENTER_CRITICAL(&sosMux);
+  const bool immediate = sos_capture_press(&sosPolicy, &sequence, eventId);
+  if (immediate) {
+    telemetrySequence = sequence;
+    fillTelemetryMessage(sosHeld, sosPolicy.sequence, true, sosPolicy.eventId);
+    sosHeldValid = true;
+    sosBackoffMs = 2000;
+    sosNextAttemptMs = 0;
+    strncpy(currentSosEventId, sosPolicy.eventId, sizeof(currentSosEventId) - 1);
+    currentSosEventId[sizeof(currentSosEventId) - 1] = '\0';
+  }
+  portEXIT_CRITICAL(&sosMux);
+}
+
+void enqueueTelemetryMessage() {
+  if (telemetryQueue == nullptr) return;
+
+  telemetrySequence++;
+
+  portENTER_CRITICAL(&sosMux);
+  const bool includeSos = sosPolicy.pending && !sosPolicy.abandoned;
+  char eventCopy[40] = {0};
+  if (includeSos) {
+    strncpy(eventCopy, sosPolicy.eventId, sizeof(eventCopy) - 1);
+  }
+  portEXIT_CRITICAL(&sosMux);
+
+  TelemetryMessage msg;
+  fillTelemetryMessage(msg, telemetrySequence, includeSos, includeSos ? eventCopy : "");
+
+  if (xQueueSend(telemetryQueue, &msg, 0) == pdTRUE) {
+    return;
+  }
+
+  TelemetryMessage dropped;
+  if (xQueueReceive(telemetryQueue, &dropped, 0) != pdTRUE) {
+    Serial.println("Telemetria descartada: cola llena");
+    return;
+  }
+  if (queue_full_decision(msg.sosActive, dropped.sosActive) == QUEUE_KEEP_OLDEST) {
+    if (xQueueSend(telemetryQueue, &dropped, 0) != pdTRUE) {
+      Serial.println("No se pudo reponer el SOS retenido");
+    }
+    return;
+  }
   if (xQueueSend(telemetryQueue, &msg, 0) != pdTRUE) {
-    if (msg.sosActive) {
-      // Forzar espacio eliminando el más antiguo ordinario
-      TelemetryMessage dropped;
-      if (xQueueReceive(telemetryQueue, &dropped, 0) == pdTRUE) {
-        xQueueSend(telemetryQueue, &msg, 0);
-      }
+    if (xQueueSend(telemetryQueue, &dropped, 0) != pdTRUE) {
+      Serial.println("Telemetria perdida al reponer la cola");
     }
   }
 }
 
+void noteSosHttp(const TelemetryMessage& msg, TelemetryHttpClass outcome) {
+  if (!msg.sosActive || msg.sosEventId[0] == '\0') {
+    return;
+  }
+  portENTER_CRITICAL(&sosMux);
+  if (sosPolicy.pending && strcmp(sosPolicy.eventId, msg.sosEventId) == 0) {
+    sos_apply_http(&sosPolicy, outcome, kSosPermanentLimit);
+    if (!sosPolicy.pending) {
+      sosHeldValid = false;
+      sosBackoffMs = 2000;
+      if (outcome == TELEMETRY_HTTP_SUCCESS) {
+        currentSosEventId[0] = '\0';
+      }
+    } else if (outcome == TELEMETRY_HTTP_TRANSIENT || outcome == TELEMETRY_HTTP_PERMANENT) {
+      sosBackoffMs = telemetry_backoff_ms(sosBackoffMs);
+      sosNextAttemptMs = millis() + static_cast<unsigned long>(sosBackoffMs);
+    }
+  }
+  portEXIT_CRITICAL(&sosMux);
+}
+
 void networkTask(void* pvParameters) {
-  // Sincronizar SNTP periódicamente en segundo plano
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 
   TelemetryMessage msg;
   SmsMessage smsMsg;
 
   while (true) {
-    // Procesar envío de SMS en segundo plano (Core 0) sin bloquear sensores ni alarmas
     if (smsQueue != nullptr && xQueueReceive(smsQueue, &smsMsg, 0) == pdTRUE) {
       sendSms(String(smsMsg.text));
     }
 
+    bool sosReady = false;
+    TelemetryMessage sosCopy{};
+    portENTER_CRITICAL(&sosMux);
+    if (sosHeldValid && sosPolicy.pending && millis() >= sosNextAttemptMs) {
+      sosCopy = sosHeld;
+      sosReady = true;
+    }
+    portEXIT_CRITICAL(&sosMux);
+
+    if (sosReady) {
+      TelemetryHttpClass outcome = TELEMETRY_HTTP_TRANSIENT;
+      if (WiFi.status() == WL_CONNECTED && strlen(SMARTVEST_API_URL) > 0) {
+        outcome = sendTelemetryHttp(sosCopy);
+      }
+      noteSosHttp(sosCopy, outcome);
+      vTaskDelay(pdMS_TO_TICKS(20));
+      continue;
+    }
+
     if (xQueueReceive(telemetryQueue, &msg, pdMS_TO_TICKS(100)) == pdTRUE) {
       if (WiFi.status() == WL_CONNECTED && strlen(SMARTVEST_API_URL) > 0) {
-        sendTelemetryHttp(msg);
-      } else if (msg.sosActive) {
-        // Si no hay red pero el mensaje era SOS, re-encolar con espera explícita
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        xQueueSendToFront(telemetryQueue, &msg, 0);
+        const TelemetryHttpClass outcome = sendTelemetryHttp(msg);
+        noteSosHttp(msg, outcome);
       }
     }
-    // Pequeño yield para el watchdog de FreeRTOS
     vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 
-void sendTelemetryHttp(const TelemetryMessage& msg) {
+TelemetryHttpClass sendTelemetryHttp(const TelemetryMessage& msg) {
   HTTPClient http;
   WiFiClientSecure secureClient;
   WiFiClient plainClient;
@@ -588,40 +675,23 @@ void sendTelemetryHttp(const TelemetryMessage& msg) {
 #if defined(SMARTVEST_CA_CERT_PEM)
     if (strlen(SMARTVEST_CA_CERT_PEM) == 0) {
       Serial.println("HTTPS abortado: SMARTVEST_CA_CERT_PEM vacio");
-      if (msg.sosActive) {
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        xQueueSendToFront(telemetryQueue, &msg, 0);
-      }
-      return;
+      return TELEMETRY_HTTP_PERMANENT;
     }
     secureClient.setCACert(SMARTVEST_CA_CERT_PEM);
 #else
-    // Si SMARTVEST_API_URL es https y no hay SMARTVEST_CA_CERT_PEM, no abrir la conexión. Prohibido setInsecure.
     Serial.println("HTTPS abortado: SMARTVEST_CA_CERT_PEM no definido");
-    if (msg.sosActive) {
-      vTaskDelay(pdMS_TO_TICKS(2000));
-      xQueueSendToFront(telemetryQueue, &msg, 0);
-    }
-    return;
+    return TELEMETRY_HTTP_PERMANENT;
 #endif
-    secureClient.setTimeout(4); // Timeout corto de 4 segundos
+    secureClient.setTimeout(4);
     if (!http.begin(secureClient, SMARTVEST_API_URL)) {
       Serial.println("HTTP begin TLS fallo");
-      if (msg.sosActive) {
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        xQueueSendToFront(telemetryQueue, &msg, 0);
-      }
-      return;
+      return TELEMETRY_HTTP_TRANSIENT;
     }
   } else {
     plainClient.setTimeout(4);
     if (!http.begin(plainClient, SMARTVEST_API_URL)) {
       Serial.println("HTTP begin plain fallo");
-      if (msg.sosActive) {
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        xQueueSendToFront(telemetryQueue, &msg, 0);
-      }
-      return;
+      return TELEMETRY_HTTP_TRANSIENT;
     }
   }
 
@@ -648,14 +718,9 @@ void sendTelemetryHttp(const TelemetryMessage& msg) {
   } else {
     Serial.print("Telemetry HTTP error -> ");
     Serial.println(http.errorToString(responseCode));
-    // Si falló el envío de una alerta SOS por error de red o timeout, reintentar tras espera explícita
-    if (msg.sosActive) {
-      vTaskDelay(pdMS_TO_TICKS(2000));
-      xQueueSendToFront(telemetryQueue, &msg, 0);
-    }
   }
-
   http.end();
+  return classify_telemetry_http(responseCode);
 }
 
 void printTelemetry() {

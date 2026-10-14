@@ -1,0 +1,11 @@
+.git
+.github
+android-native
+firmware
+hardware
+mobile
+node_modules
+specs
+tests
+docs
+*.md
