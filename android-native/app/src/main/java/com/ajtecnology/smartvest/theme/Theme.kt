@@ -2,8 +2,18 @@ package com.ajtecnology.smartvest.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.Typography
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+
+val Outline = Color(0xFFE2E8F0)
+val BrandAccent = Color(0xFFEA580C)
 
 val Night = Color(0xFF0F172A)
 val Signal = Color(0xFF1E40AF)
@@ -32,14 +42,29 @@ private val SmartVestColors = lightColorScheme(
     onBackground = Night,
     surface = CardBg,
     onSurface = BodyText,
+    surfaceVariant = Inset,
+    onSurfaceVariant = BodyText,
+    outline = Outline,
     error = SosRed,
     onError = Color.White
+)
+
+private val SmartVestTypography = Typography(
+    headlineLarge = TextStyle(fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold),
+    headlineMedium = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold),
+    titleLarge = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+    titleMedium = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
+    labelLarge = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
 )
 
 @Composable
 fun SmartVestTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = SmartVestColors,
+        typography = SmartVestTypography,
+        shapes = Shapes(small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(20.dp), large = RoundedCornerShape(24.dp)),
         content = content
     )
 }

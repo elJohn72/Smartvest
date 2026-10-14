@@ -73,3 +73,7 @@ QR filtrado: revocación y minimización, no cache/indexación y consentimiento 
 Evento perdido/duplicado: transacción+outbox+leases/dedupe, ensayo crash durante envío; exactly-once en proveedor no se promete.
 Dispositivo viejo: validar minSdk en equipo; no bajar seguridad para hacerlo compatible.
 Deploy rollback: schema expand/contract y backup probado; no confundir volumen con copia.
+
+## Ajuste UX/UI pedido por John — 2026-10-14
+
+Implementación autorizada: reemplazar la lista que mezcla gestión y lecturas por tres destinos (Monitoreo, Perfiles, Historial), priorizar lectura/estado, integrar logo SmartVest, definir tipografía Material 3 y mejorar acceso/estados vacíos. Sistema en `.interface-design/system.md`; recorrido físico en `docs/testing/ANDROID_UX_2026-10-14.md`. Mantener contrato API, sesión, firmware, paquete/firma y límites M1. No declarar aceptación física por screenshots de emulador.

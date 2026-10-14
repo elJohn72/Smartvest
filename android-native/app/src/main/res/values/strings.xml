@@ -78,4 +78,23 @@
     <string name="revoke_qr_button">Revocar QR</string>
     <string name="qr_revoked">Enlace revocado. Ya no se puede abrir.</string>
     <string name="selected_profile">%1$s, seleccionado</string>
+    <string name="brand_descriptor">Asistencia conectada</string>
+    <string name="welcome_title">Bienvenido</string>
+    <string name="welcome_subtitle">Consulta las lecturas del chaleco y acompaña a la persona que cuidas.</string>
+    <string name="lab_access_note">Entorno de pruebas · Usa solo datos de laboratorio.</string>
+    <string name="tab_monitor">Monitoreo</string>
+    <string name="tab_profiles">Perfiles</string>
+    <string name="tab_history">Historial</string>
+    <string name="lab_short">Laboratorio · Datos de prueba</string>
+    <string name="monitor_title">El chaleco, de un vistazo</string>
+    <string name="monitor_subtitle">Lecturas y estado de la conexión</string>
+    <string name="profiles_subtitle">Gestiona a quién acompañas y su chaleco.</string>
+    <string name="history_subtitle">Lecturas recibidas del perfil seleccionado.</string>
+    <string name="profile_switch">Cambiar perfil</string>
+    <string name="no_profile_title">Empecemos por un perfil</string>
+    <string name="no_profile_body">Crea un perfil de prueba y vincula su chaleco para comenzar a recibir lecturas.</string>
+    <string name="vest_setup_title">Conecta el chaleco</string>
+    <string name="vest_setup_body">El perfil está creado. Vincula el dispositivo con su código de un solo uso.</string>
+    <string name="selected_person">Perfil seleccionado</string>
+    <string name="reading_section">Lectura del sensor</string>
 </resources>

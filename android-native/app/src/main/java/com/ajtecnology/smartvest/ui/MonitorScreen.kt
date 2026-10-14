@@ -4,6 +4,23 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.res.painterResource
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +57,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,6 +97,7 @@ fun MonitorScreen(
     var showPairDialog by remember { mutableStateOf(false) }
     var showQrDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var destination by rememberSaveable { mutableIntStateOf(0) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     LaunchedEffect(Unit) {
@@ -85,31 +107,89 @@ fun MonitorScreen(
         }
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Paper)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Text(
-                text = stringResource(R.string.app_name),
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Night
-            )
-            TextButton(
-                onClick = onLogoutClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-            ) {
-                Text(stringResource(R.string.logout_button), color = Night, fontSize = 16.sp)
+    Scaffold(
+        containerColor = Paper,
+        bottomBar = {
+            NavigationBar(containerColor = CardBg, tonalElevation = 0.dp) {
+                val labels = listOf(R.string.tab_monitor, R.string.tab_profiles, R.string.tab_history)
+                val icons = listOf(Icons.Filled.Sensors, Icons.Filled.People, Icons.Filled.History)
+                labels.forEachIndexed { index, label ->
+                    NavigationBarItem(
+                        selected = destination == index,
+                        onClick = { destination = index },
+                        icon = { Icon(icons[index], contentDescription = null) },
+                        label = { Text(stringResource(label)) }
+                    )
+                }
             }
         }
-        item { NoticeCard(stringResource(R.string.lab_banner), Inset, BodyText) }
-        item { NoticeCard(stringResource(R.string.foreground_only_banner), CautionSoft, WarnOrange) }
+    ) { insets ->
+        LazyColumn(
+            modifier = modifier.fillMaxSize().padding(insets),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Image(painterResource(R.mipmap.ic_smartvest), contentDescription = null, modifier = Modifier.size(36.dp))
+                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge,
+                        color = Night, modifier = Modifier.weight(1f).padding(start = 10.dp))
+                    IconButton(onClick = onLogoutClick, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.logout_button), tint = MetaText)
+                    }
+                }
+                Text(stringResource(R.string.lab_short), style = MaterialTheme.typography.bodyMedium, color = MetaText,
+                    modifier = Modifier.padding(top = 8.dp))
+            }
+            item {
+                Text(stringResource(when (destination) {
+                    1 -> R.string.tab_profiles
+                    2 -> R.string.tab_history
+                    else -> R.string.monitor_title
+                }), style = MaterialTheme.typography.headlineMedium, color = Night, modifier = Modifier.semantics { heading() })
+                Text(stringResource(when (destination) {
+                    1 -> R.string.profiles_subtitle
+                    2 -> R.string.history_subtitle
+                    else -> R.string.monitor_subtitle
+                }), style = MaterialTheme.typography.bodyLarge, color = BodyText,
+                    modifier = Modifier.padding(top = 8.dp))
+            }
+            when (destination) {
+                0 -> {
+                    if (selectedProfile == null) {
+                        item {
+                            SetupCard(stringResource(R.string.no_profile_title), stringResource(R.string.no_profile_body),
+                                stringResource(R.string.new_profile)) { showCreateProfileDialog = true }
+                        }
+                    } else {
+                        item {
+                            Card(colors = CardDefaults.cardColors(containerColor = Inset)) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                                    Text(stringResource(R.string.selected_person), style = MaterialTheme.typography.bodyMedium, color = MetaText)
+                                    Text(selectedProfile!!.presentationName, style = MaterialTheme.typography.titleMedium, color = Night)
+                                    TextButton(onClick = { destination = 1 }) { Text(stringResource(R.string.profile_switch)) }
+                                }
+                            }
+                        }
+                        if (selectedProfile?.deviceId.isNullOrBlank()) {
+                            item {
+                                SetupCard(stringResource(R.string.vest_setup_title), stringResource(R.string.vest_setup_body),
+                                    stringResource(R.string.pair_button)) { showPairDialog = true }
+                            }
+                        } else {
+                            item { MonitorStatus(state, true, nowMs) }
+                        }
+                        item {
+                            OutlinedButton(onClick = { showQrDialog = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                                Text(stringResource(R.string.qr_button))
+                            }
+                        }
+                    }
+                    item {
+                        Text(stringResource(R.string.foreground_only_banner), style = MaterialTheme.typography.bodyMedium, color = BodyText)
+                    }
+                }
+                1 -> {
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -182,9 +262,11 @@ fun MonitorScreen(
                 }
             }
         }
-        item {
-            MonitorStatus(state = state, hasVest = !selectedProfile?.deviceId.isNullOrBlank(), nowMs = nowMs)
-        }
+                }
+                2 -> {
+                    if (selectedProfile != null) {
+                        item { Text(selectedProfile!!.presentationName, style = MaterialTheme.typography.titleMedium, color = Signal) }
+                    }
         item {
             Text(
                 text = stringResource(R.string.history_title),
@@ -226,7 +308,10 @@ fun MonitorScreen(
                 }
             }
         }
-        item { Spacer(modifier = Modifier.height(24.dp)) }
+                }
+            }
+            item { Text(stringResource(R.string.lab_banner), style = MaterialTheme.typography.bodyMedium, color = MetaText) }
+        }
     }
 
     if (showCreateProfileDialog) {
@@ -276,6 +361,17 @@ fun MonitorScreen(
 }
 
 @Composable
+private fun SetupCard(title: String, body: String, action: String, onClick: () -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = CardBg), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, color = Night)
+            Text(body, style = MaterialTheme.typography.bodyLarge, color = BodyText)
+            Button(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(action) }
+        }
+    }
+}
+
+@Composable
 private fun NoticeCard(text: String, background: Color, content: Color) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -294,7 +390,7 @@ private fun WideButton(
 ) {
     val modifier = Modifier
         .fillMaxWidth()
-        .heightIn(min = 48.dp)
+        .heightIn(min = 56.dp)
     if (outlined) {
         OutlinedButton(onClick = onClick, modifier = modifier) { Text(label, fontSize = 16.sp) }
     } else {
@@ -350,7 +446,7 @@ private fun ReadingCard(reading: TelemetryReading, nowMs: Long) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (reading.sosActive) {
-            Card(colors = CardDefaults.cardColors(containerColor = SosSoft), modifier = Modifier.fillMaxWidth()) {
+            Card(colors = CardDefaults.cardColors(containerColor = SosSoft), modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive }) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(stringResource(R.string.sos_active_alert), color = SosRed, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                     Text(stringResource(R.string.sos_detail), color = BodyText, fontSize = 16.sp)
@@ -368,10 +464,12 @@ private fun ReadingCard(reading: TelemetryReading, nowMs: Long) {
             colors = CardDefaults.cardColors(containerColor = CardBg)
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.reading_section), style = MaterialTheme.typography.bodyMedium, color = MetaText)
                 Text(distanceBandLabel(reading.distanceCm), color = bandColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Text(
                     text = reading.distanceCm?.toInt()?.toString() ?: "--",
                     fontSize = 56.sp,
+                    lineHeight = 64.sp,
                     fontWeight = FontWeight.Bold,
                     color = bandColor
                 )

@@ -1,6 +1,19 @@
 package com.ajtecnology.smartvest.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +54,7 @@ import com.ajtecnology.smartvest.R
 import com.ajtecnology.smartvest.data.ApiClient
 import com.ajtecnology.smartvest.data.LoginRequest
 import com.ajtecnology.smartvest.data.RegisterRequest
+import com.ajtecnology.smartvest.theme.BodyText
 import com.ajtecnology.smartvest.theme.MetaText
 import com.ajtecnology.smartvest.theme.Night
 import com.ajtecnology.smartvest.theme.Paper
@@ -68,24 +82,33 @@ fun LoginScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Paper)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Image(painterResource(R.mipmap.ic_smartvest), contentDescription = null, modifier = Modifier.size(52.dp))
+            Column {
+                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, color = Night)
+                Text(stringResource(R.string.brand_descriptor), style = MaterialTheme.typography.bodyMedium, color = MetaText)
+            }
+        }
+        Spacer(modifier = Modifier.height(40.dp))
         Text(
-            text = if (isRegisterMode) stringResource(R.string.register_title) else stringResource(R.string.login_title),
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
+            text = if (isRegisterMode) stringResource(R.string.register_title) else stringResource(R.string.welcome_title),
+            style = MaterialTheme.typography.headlineLarge,
             color = Night
         )
         Text(
-            text = if (isRegisterMode) stringResource(R.string.register_subtitle) else stringResource(R.string.login_subtitle),
-            fontSize = 16.sp,
-            color = MetaText,
-            modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
+            text = if (isRegisterMode) stringResource(R.string.register_subtitle) else stringResource(R.string.welcome_subtitle),
+            style = MaterialTheme.typography.bodyLarge,
+            color = BodyText,
+            modifier = Modifier.padding(top = 12.dp, bottom = 32.dp)
         )
-
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
@@ -119,7 +142,7 @@ fun LoginScreen(
 
         if (errorMessage != null) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = errorMessage!!, color = SosRed, fontSize = 16.sp)
+            Text(text = errorMessage!!, color = SosRed, fontSize = 16.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -147,14 +170,21 @@ fun LoginScreen(
                     isLoading = false
                     result.fold(
                         onSuccess = { onLoginSuccess() },
-                        onFailure = { errorMessage = it.message ?: shortPassword }
+                        onFailure = {
+                            errorMessage = when {
+                                it.message == "UNAUTHORIZED" -> "Usuario o contraseña incorrectos."
+                                it.message?.contains("429") == true -> "Demasiados intentos. Espera unos minutos y vuelve a intentar."
+                                else -> "No se pudo conectar. Revisa tu conexión y vuelve a intentar."
+                            }
+                        }
                     )
                 }
             },
             enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp),
+                .heightIn(min = 56.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Signal)
         ) {
             if (isLoading) {
@@ -182,5 +212,7 @@ fun LoginScreen(
                 fontSize = 16.sp
             )
         }
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(stringResource(R.string.lab_access_note), style = MaterialTheme.typography.bodyMedium, color = MetaText)
     }
 }
