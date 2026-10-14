@@ -18,6 +18,7 @@ WORKDIR /var/www/html
 
 # Copiar aplicación
 COPY api /var/www/html/api
+COPY public/images/smartvest-v2 /var/www/html/brand
 COPY infra/smartvest/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh \

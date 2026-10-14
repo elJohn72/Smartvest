@@ -1,0 +1,17 @@
+{
+  "scope_id": "SMARTVEST",
+  "status": "PROPUESTA_V2",
+  "source": "Paleta declarada SmartVest; manifiesto AJENZA 2026-09-07 y Theme.kt existente",
+  "colors": {
+    "primary": "#1E40AF",
+    "dark": "#0F172A",
+    "accent": "#EA580C",
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "text": "#334155",
+    "secondaryText": "#64748B",
+    "warningText": "#C2410C",
+    "sos": "#B91C1C",
+    "success": "#166534"
+  }
+}

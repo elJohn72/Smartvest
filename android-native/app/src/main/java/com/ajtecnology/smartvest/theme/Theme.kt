@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 
 val Night = Color(0xFF0F172A)
 val Signal = Color(0xFF1E40AF)
+// Identidad SmartVest: acento decorativo; avisos usan WarnOrange para contraste.
+val BrandAccent = Color(0xFFEA580C)
 val Pulse = Color(0xFF3B82F6)
 val Paper = Color(0xFFF8FAFC)
 val CardBg = Color(0xFFFFFFFF)
