@@ -127,7 +127,12 @@ struct TelemetryMessage {
   char sosEventId[37];
 };
 
+struct SmsMessage {
+  char text[160];
+};
+
 static QueueHandle_t telemetryQueue = nullptr;
+static QueueHandle_t smsQueue = nullptr;
 static TaskHandle_t networkTaskHandle = nullptr;
 
 float measureDistanceCm();
@@ -196,8 +201,9 @@ void setup() {
            randBytes[8], randBytes[9], randBytes[10], randBytes[11],
            randBytes[12], randBytes[13], randBytes[14], randBytes[15]);
 
-  // Crear cola de telemetría acotada (máximo 10 mensajes) para no agotar RAM si la red cae
+  // Crear colas acotadas para telemetría y SMS para no agotar RAM si la red o el módem caen
   telemetryQueue = xQueueCreate(10, sizeof(TelemetryMessage));
+  smsQueue = xQueueCreate(3, sizeof(SmsMessage));
   if (telemetryQueue != nullptr) {
     xTaskCreatePinnedToCore(
         networkTask,
@@ -242,7 +248,8 @@ void loop() {
   if (sosPressed && !sosEdgeLatched) {
     sosEdgeLatched = true;
 
-    if (SMARTVEST_ENABLE_SIM800) {
+    if (SMARTVEST_ENABLE_SIM800 && smsQueue != nullptr) {
+      SmsMessage smsMsg;
       String message = String("ALERTA SOS SmartVest\n") +
                        "deviceId: " + SMARTVEST_DEVICE_ID + "\n" +
                        "Distancia: " + String(currentDistanceCm, 0) + " cm\n";
@@ -256,9 +263,12 @@ void loop() {
         message += "GPS sin fix. Abre el perfil web del cuidador.";
       }
 
-      const bool smsOk = sendSms(message);
-      Serial.print("SMS SOS -> ");
-      Serial.println(smsOk ? "OK" : "FALLO");
+      strncpy(smsMsg.text, message.c_str(), sizeof(smsMsg.text) - 1);
+      smsMsg.text[sizeof(smsMsg.text) - 1] = '\0';
+
+      if (xQueueSend(smsQueue, &smsMsg, 0) != pdTRUE) {
+        Serial.println("SMS: cola llena, descartando SMS duplicado");
+      }
     }
   }
 
@@ -545,18 +555,25 @@ void networkTask(void* pvParameters) {
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 
   TelemetryMessage msg;
+  SmsMessage smsMsg;
+
   while (true) {
-    if (xQueueReceive(telemetryQueue, &msg, portMAX_DELAY) == pdTRUE) {
+    // Procesar envío de SMS en segundo plano (Core 0) sin bloquear sensores ni alarmas
+    if (smsQueue != nullptr && xQueueReceive(smsQueue, &smsMsg, 0) == pdTRUE) {
+      sendSms(String(smsMsg.text));
+    }
+
+    if (xQueueReceive(telemetryQueue, &msg, pdMS_TO_TICKS(100)) == pdTRUE) {
       if (WiFi.status() == WL_CONNECTED && strlen(SMARTVEST_API_URL) > 0) {
         sendTelemetryHttp(msg);
       } else if (msg.sosActive) {
-        // Si no hay red pero el mensaje era SOS, re-encolar al principio para reintento
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        // Si no hay red pero el mensaje era SOS, re-encolar con espera explícita
+        vTaskDelay(pdMS_TO_TICKS(2000));
         xQueueSendToFront(telemetryQueue, &msg, 0);
       }
     }
     // Pequeño yield para el watchdog de FreeRTOS
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 
@@ -569,16 +586,43 @@ void sendTelemetryHttp(const TelemetryMessage& msg) {
 
   if (isHttps) {
 #if defined(SMARTVEST_CA_CERT_PEM)
+    if (strlen(SMARTVEST_CA_CERT_PEM) == 0) {
+      Serial.println("HTTPS abortado: SMARTVEST_CA_CERT_PEM vacio");
+      if (msg.sosActive) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        xQueueSendToFront(telemetryQueue, &msg, 0);
+      }
+      return;
+    }
     secureClient.setCACert(SMARTVEST_CA_CERT_PEM);
 #else
-    // Si no hay CA definida explícitamente en el lab, no permitir tráfico inseguro ciego
-    // En producción se exige certificado CA
+    // Si SMARTVEST_API_URL es https y no hay SMARTVEST_CA_CERT_PEM, no abrir la conexión. Prohibido setInsecure.
+    Serial.println("HTTPS abortado: SMARTVEST_CA_CERT_PEM no definido");
+    if (msg.sosActive) {
+      vTaskDelay(pdMS_TO_TICKS(2000));
+      xQueueSendToFront(telemetryQueue, &msg, 0);
+    }
+    return;
 #endif
     secureClient.setTimeout(4); // Timeout corto de 4 segundos
-    http.begin(secureClient, SMARTVEST_API_URL);
+    if (!http.begin(secureClient, SMARTVEST_API_URL)) {
+      Serial.println("HTTP begin TLS fallo");
+      if (msg.sosActive) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        xQueueSendToFront(telemetryQueue, &msg, 0);
+      }
+      return;
+    }
   } else {
     plainClient.setTimeout(4);
-    http.begin(plainClient, SMARTVEST_API_URL);
+    if (!http.begin(plainClient, SMARTVEST_API_URL)) {
+      Serial.println("HTTP begin plain fallo");
+      if (msg.sosActive) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        xQueueSendToFront(telemetryQueue, &msg, 0);
+      }
+      return;
+    }
   }
 
   http.setTimeout(4000);
@@ -604,8 +648,9 @@ void sendTelemetryHttp(const TelemetryMessage& msg) {
   } else {
     Serial.print("Telemetry HTTP error -> ");
     Serial.println(http.errorToString(responseCode));
-    // Si falló el envío de una alerta SOS por error de red o timeout, reintentar
+    // Si falló el envío de una alerta SOS por error de red o timeout, reintentar tras espera explícita
     if (msg.sosActive) {
+      vTaskDelay(pdMS_TO_TICKS(2000));
       xQueueSendToFront(telemetryQueue, &msg, 0);
     }
   }

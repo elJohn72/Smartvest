@@ -263,8 +263,8 @@ assert_equals($bootA, $st1['json']['data']['bootId'], 'Estado debe tener Boot A'
 assert_equals(10, $st1['json']['data']['sequence'], 'Estado debe tener secuencia 10');
 assert_equals(false, $st1['json']['data']['sosActive'], 'SOS debe estar inactivo');
 
-// Paso 6.2: Enviar Boot B (reinicio), secuencia 1, SOS = true
-usleep(1100000); // 1.1s para garantizar marca temporal posterior en UTC_TIMESTAMP
+// Paso 6.2: Enviar Boot B (reinicio legítimo en el mismo segundo), secuencia 1, SOS = true
+// Sin necesidad de usleep ni reloj de un segundo: boot_epoch asigna un entero monotónico
 $sosEvtId = 'sos-event-' . bin2hex(random_bytes(8));
 $resp2 = http_request('POST', '/api/v1/telemetry', $telemetryHeaders, [
     'deviceId' => $dev1,
@@ -285,7 +285,7 @@ assert_equals($bootB, $st2['json']['data']['bootId'], 'Estado debe haber cambiad
 assert_equals(1, $st2['json']['data']['sequence'], 'Secuencia debe ser 1');
 assert_equals(true, $st2['json']['data']['sosActive'], 'SOS debe estar ACTIVO');
 
-// Paso 6.3: REENVIAR Boot A, secuencia 10, SOS = false (Paquete rezagado / replay de boot retirado)
+// Paso 6.3: REENVIAR Boot A en el mismo segundo, con secuencia 10 y SOS inactivo (Paquete rezagado / replay de boot retirado)
 $respReplay = http_request('POST', '/api/v1/telemetry', $telemetryHeaders, [
     'deviceId' => $dev1,
     'bootId' => $bootA,
@@ -304,6 +304,28 @@ assert_true(in_array($respReplay['status'], [200, 202]), 'El paquete replay debe
 $stAfterReplay = http_request('GET', "/api/v1/devices/$dev1/state", ['Authorization' => "Bearer $tokenA"]);
 assert_equals($bootB, $stAfterReplay['json']['data']['bootId'], 'El estado debe conservar Boot B (Boot A es retirado)');
 assert_equals(true, $stAfterReplay['json']['data']['sosActive'], 'El SOS activo de Boot B NUNCA debe ser apagado por el boot antiguo');
+
+// Paso 6.4: REENVIAR Boot A con secuencia todavía MAYOR (sequence 99) y SOS inactivo en el mismo segundo
+$respReplayHigherSeq = http_request('POST', '/api/v1/telemetry', $telemetryHeaders, [
+    'deviceId' => $dev1,
+    'bootId' => $bootA,
+    'sequence' => 99,
+    'distanceCm' => 250.0,
+    'gpsFix' => false,
+    'latitude' => null,
+    'longitude' => null,
+    'batteryLevel' => 95,
+    'sosActive' => false,
+    'sosEventId' => null,
+]);
+assert_true(in_array($respReplayHigherSeq['status'], [200, 202]), 'El paquete rezagado con secuencia mayor debe aceptarse sin 500');
+
+// VERIFICACIÓN CRÍTICA: Boot A retirado, incluso con secuencia mayor y en el mismo segundo, NO cambia mediciones ni apaga SOS
+$stAfterHigherReplay = http_request('GET', "/api/v1/devices/$dev1/state", ['Authorization' => "Bearer $tokenA"]);
+assert_equals($bootB, $stAfterHigherReplay['json']['data']['bootId'], 'Boot retirado con secuencia mayor no debe reemplazar el boot actual');
+assert_equals(1, $stAfterHigherReplay['json']['data']['sequence'], 'La secuencia del estado debe permanecer en Boot B seq 1');
+assert_equals(true, $stAfterHigherReplay['json']['data']['sosActive'], 'El SOS activo debe mantenerse intacto');
+assert_equals(20.0, (float)$stAfterHigherReplay['json']['data']['distanceCm'], 'La distancia debe conservar la medición de Boot B');
 
 // 7. Shares públicos QR y consentimiento vía HTTP
 echo "7. Probando Creación, Lectura Pública y Revocación de Shares QR vía HTTP...\n";

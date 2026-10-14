@@ -101,3 +101,14 @@ CREATE TABLE IF NOT EXISTS sos_events (
     UNIQUE KEY uq_device_event (device_id, event_id),
     CONSTRAINT fk_sos_events_device FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS device_boots (
+    device_id VARCHAR(100) NOT NULL,
+    boot_id VARCHAR(36) NOT NULL,
+    boot_epoch BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (boot_epoch),
+    UNIQUE KEY uq_device_boot (device_id, boot_id),
+    INDEX idx_device_epoch (device_id, boot_epoch),
+    CONSTRAINT fk_device_boots_device FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

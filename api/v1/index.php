@@ -545,7 +545,22 @@ if ((preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) || $path === 'teleme
             }
         }
 
-        // 2. Transacción de estado monotónico con SELECT ... FOR UPDATE
+        // 2. Asignar/obtener el entero monotónico (boot_epoch) para este bootId
+        $bootEpochStmt = $pdo->prepare('
+            INSERT INTO device_boots (device_id, boot_id, first_seen_at)
+            VALUES (:dev, :boot, UTC_TIMESTAMP())
+            ON DUPLICATE KEY UPDATE boot_epoch = LAST_INSERT_ID(boot_epoch)
+        ');
+        $bootEpochStmt->execute(['dev' => $deviceId, 'boot' => $bootId]);
+        $newBootEpoch = (int)$pdo->lastInsertId();
+
+        if ($newBootEpoch === 0) {
+            $getEpoch = $pdo->prepare('SELECT boot_epoch FROM device_boots WHERE device_id = :dev AND boot_id = :boot');
+            $getEpoch->execute(['dev' => $deviceId, 'boot' => $bootId]);
+            $newBootEpoch = (int)$getEpoch->fetchColumn();
+        }
+
+        // 3. Transacción de estado monotónico con SELECT ... FOR UPDATE
         $stateStmt = $pdo->prepare('SELECT boot_id, sequence, sos_active FROM telemetry_state WHERE device_id = :dev FOR UPDATE');
         $stateStmt->execute(['dev' => $deviceId]);
         $currentState = $stateStmt->fetch(PDO::FETCH_ASSOC);
@@ -562,45 +577,25 @@ if ((preg_match('#^devices/([^/]+)/telemetry$#', $path, $m) || $path === 'teleme
             // Política de actualización monotónica estricta y protección ante boots retirados:
             // 1. Mismo boot: solo avanzar si la secuencia es estrictamente mayor.
             //    Si la secuencia es menor o igual, un paquete rezagado NUNCA sobrescribe mediciones ni apaga SOS.
-            // 2. Diferente boot:
-            //    Verificar si $bootId es un boot retirado (ya visto en el pasado antes del boot actual).
-            //    Si en el historial ya existen registros de $currBoot con fecha posterior al primer registro de $bootId,
-            //    o si $bootId tiene registros históricos anteriores al boot actual, $bootId es un boot viejo/retirado.
+            // 2. Diferente boot: comparar el entero monotónico boot_epoch.
+            //    Si el boot entrante tiene un boot_epoch menor que el boot actual del estado,
+            //    es un boot RETIRADO: bajo ninguna circunstancia puede sobrescribir mediciones
+            //    ni apagar una alerta SOS más reciente, incluso con secuencia mayor o llegado en el mismo segundo.
             if ($bootId === $currBoot) {
                 if ($seq > $currSeq) {
                     $shouldUpdateState = true;
                 }
             } else {
-                // Comprobar si $bootId es anterior a $currBoot comparando el primer registro histórico de ambos
-                $bootOrderStmt = $pdo->prepare('
-                    SELECT
-                        (SELECT MIN(received_at) FROM telemetry_history WHERE device_id = :dev AND boot_id = :currBoot) AS curr_first_seen,
-                        (SELECT MIN(received_at) FROM telemetry_history WHERE device_id = :dev AND boot_id = :newBoot) AS new_first_seen
-                ');
-                $bootOrderStmt->execute([
-                    'dev' => $deviceId,
-                    'currBoot' => $currBoot,
-                    'newBoot' => $bootId,
-                ]);
-                $order = $bootOrderStmt->fetch(PDO::FETCH_ASSOC);
+                $currEpochStmt = $pdo->prepare('SELECT boot_epoch FROM device_boots WHERE device_id = :dev AND boot_id = :currBoot');
+                $currEpochStmt->execute(['dev' => $deviceId, 'currBoot' => $currBoot]);
+                $currBootEpoch = (int)$currEpochStmt->fetchColumn();
 
-                $currFirst = $order['curr_first_seen'] ?? null;
-                $newFirst = $order['new_first_seen'] ?? null;
-
-                // Si el boot nuevo ya tenía registros previos a currFirst, es un boot retirado/viejo -> descartar reemplazo
-                $isRetiredBoot = false;
-                if ($currFirst !== null && $newFirst !== null) {
-                    if (strtotime($newFirst) < strtotime($currFirst)) {
-                        $isRetiredBoot = true;
-                    }
-                }
-
-                if (!$isRetiredBoot) {
-                    // Es un boot nuevo legítimo (reinicio del ESP32).
-                    // Sin embargo, si el estado actual tiene una alerta SOS activa y el nuevo boot llega con SOS inactivo,
-                    // solo reemplazar si el nuevo boot ya está establecido o mantener SOS visible.
-                    // Para evitar apagar un SOS reciente por un reinicio o replay sin SOS:
+                if ($newBootEpoch > $currBootEpoch) {
+                    // Boot legítimo posterior (reinicio de hardware posterior)
                     $shouldUpdateState = true;
+                } else {
+                    // $newBootEpoch <= $currBootEpoch: boot retirado / paquete del pasado
+                    $shouldUpdateState = false;
                 }
             }
         }
