@@ -13,8 +13,8 @@ android {
         applicationId = "com.ajtecnology.smartvest"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "1.2.0-m1-ui"
+        versionCode = 31
+        versionName = "1.2.4-m1-ui"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

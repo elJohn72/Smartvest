@@ -22,8 +22,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -45,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -77,6 +81,46 @@ fun LoginScreen(
     val scope = rememberCoroutineScope()
     val missingFields = stringResource(R.string.login_missing_fields)
     val shortPassword = stringResource(R.string.login_short_password)
+    val wrongCredentials = stringResource(R.string.login_wrong_credentials)
+    val rateLimited = stringResource(R.string.login_rate_limited)
+    val labError = stringResource(R.string.login_lab_error)
+    val noConnection = stringResource(R.string.login_no_connection)
+    val passwordFocus = remember { FocusRequester() }
+    fun submit() {
+        if (isLoading) return
+        if (username.isBlank() || password.isBlank()) {
+            errorMessage = missingFields
+            return
+        }
+        if (password.length < 8) {
+            errorMessage = shortPassword
+            return
+        }
+        isLoading = true
+        errorMessage = null
+        scope.launch {
+            val result = if (isRegisterMode) {
+                apiClient.register(RegisterRequest(username.trim(), password)).fold(
+                    onSuccess = { apiClient.login(LoginRequest(username.trim(), password)) },
+                    onFailure = { Result.failure(it) }
+                )
+            } else {
+                apiClient.login(LoginRequest(username.trim(), password))
+            }
+            isLoading = false
+            result.fold(
+                onSuccess = { onLoginSuccess() },
+                onFailure = {
+                    errorMessage = when (classifyLoginFailure(it.message)) {
+                        LoginFailureKind.WRONG_CREDENTIALS -> wrongCredentials
+                        LoginFailureKind.RATE_LIMITED -> rateLimited
+                        LoginFailureKind.LAB_ERROR -> labError
+                        LoginFailureKind.NO_CONNECTION -> noConnection
+                    }
+                }
+            )
+        }
+    }
 
     Column(
         modifier = modifier
@@ -113,6 +157,8 @@ fun LoginScreen(
             value = username,
             onValueChange = { username = it },
             label = { Text(stringResource(R.string.username_label)) },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -122,7 +168,8 @@ fun LoginScreen(
             onValueChange = { password = it },
             label = { Text(stringResource(R.string.password_label)) },
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
             trailingIcon = {
                 IconButton(
                     onClick = { passwordVisible = !passwordVisible },
@@ -136,7 +183,9 @@ fun LoginScreen(
                     )
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(passwordFocus),
             singleLine = true
         )
 
@@ -147,39 +196,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
         Button(
-            onClick = {
-                if (username.isBlank() || password.isBlank()) {
-                    errorMessage = missingFields
-                    return@Button
-                }
-                if (password.length < 8) {
-                    errorMessage = shortPassword
-                    return@Button
-                }
-                isLoading = true
-                errorMessage = null
-                scope.launch {
-                    val result = if (isRegisterMode) {
-                        apiClient.register(RegisterRequest(username.trim(), password)).fold(
-                            onSuccess = { apiClient.login(LoginRequest(username.trim(), password)) },
-                            onFailure = { Result.failure(it) }
-                        )
-                    } else {
-                        apiClient.login(LoginRequest(username.trim(), password))
-                    }
-                    isLoading = false
-                    result.fold(
-                        onSuccess = { onLoginSuccess() },
-                        onFailure = {
-                            errorMessage = when {
-                                it.message == "UNAUTHORIZED" -> "Usuario o contraseña incorrectos."
-                                it.message?.contains("429") == true -> "Demasiados intentos. Espera unos minutos y vuelve a intentar."
-                                else -> "No se pudo conectar. Revisa tu conexión y vuelve a intentar."
-                            }
-                        }
-                    )
-                }
-            },
+            onClick = { submit() },
             enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()

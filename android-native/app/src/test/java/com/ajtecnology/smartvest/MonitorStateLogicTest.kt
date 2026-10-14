@@ -3,7 +3,9 @@ package com.ajtecnology.smartvest
 import com.ajtecnology.smartvest.data.TelemetryReading
 import com.ajtecnology.smartvest.ui.DistanceBand
 import com.ajtecnology.smartvest.ui.MonitorUiState
+import com.ajtecnology.smartvest.ui.LoginFailureKind
 import com.ajtecnology.smartvest.ui.batteryLabel
+import com.ajtecnology.smartvest.ui.classifyLoginFailure
 import com.ajtecnology.smartvest.ui.distanceBand
 import com.ajtecnology.smartvest.ui.distanceBandLabel
 import com.ajtecnology.smartvest.ui.gpsLabel
@@ -17,6 +19,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MonitorStateLogicTest {
+
+    @Test
+    fun testLoginFailureIsNotReportedAsConnection() {
+        assertEquals(LoginFailureKind.WRONG_CREDENTIALS, classifyLoginFailure("Usuario o contraseña incorrectos."))
+        assertEquals(LoginFailureKind.WRONG_CREDENTIALS, classifyLoginFailure("UNAUTHORIZED"))
+        assertEquals(LoginFailureKind.RATE_LIMITED, classifyLoginFailure("Error HTTP 429"))
+        assertEquals(LoginFailureKind.LAB_ERROR, classifyLoginFailure("Error HTTP 500"))
+        assertEquals(LoginFailureKind.NO_CONNECTION, classifyLoginFailure("Unable to resolve host"))
+        assertEquals(LoginFailureKind.NO_CONNECTION, classifyLoginFailure(null))
+    }
 
     @Test
     fun testStaleDataDetection() {

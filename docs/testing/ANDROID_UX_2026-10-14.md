@@ -1,6 +1,6 @@
 # SmartVest — pruebas de interfaz y teléfono
 
-Versión propuesta: 1.2.0-m1-ui / código 27. Ámbito SMARTVEST, datos PRUEBA.
+Candidato de interfaz: 1.2.4-m1-ui / código 31. Ámbito SMARTVEST, datos PRUEBA.
 Sistema visual: `.interface-design/system.md`.
 
 ## Preparación
@@ -36,12 +36,36 @@ Si la firma no coincide, detener la actualización y conservar la app/datos exis
 
 Registrar dispositivo, Android, commit/APK, capturas saneadas y cada resultado. No filmar datos personales ni contraseñas. La evidencia de UI no sustituye SC-001–005, restauración/rollback ni validación del chaleco.
 
-## Estado del handoff — 2026-10-14
+## Resultado de la revisión visual — 2026-10-14
 
-- UX implementada: tres destinos Monitoreo/Perfiles/Historial, logo, tipografía explícita, acceso y estados vacíos mejorados. Android versión 27 / 1.2.0-m1-ui.
-- Validación local: assembleRelease, testDebugUnitTest y lintDebug terminaron; XML lint sin Error/Fatal. Persisten advertencias de dependencias/target ya existentes.
-- Smoke real de laboratorio: readiness HTTP 200, registro PRUEBA HTTP 201, login HTTP 200 y creación de perfil PRUEBA HTTP 201 por cliente TLS verificado. No dispositivo vinculado ni telemetría inventada.
-- Emulador SmartVest_UI nuevo en disco interno: instalación APK exitosa y screenshot login-100.png revisado. La ruta SDK system-images dejó de depender de un enlace roto al SSD externo, conservado como respaldo local. No borrar el AVD antiguo.
-- Acceso mediante UI del emulador todavía no validado: la prueba automatizada mostró mensaje de conexión y el texto del usuario observado no coincidía completamente con el generado. Revisar entrada de teclado, credenciales y conectividad antes de atribuir una causa. No presentar ese intento como login exitoso.
-- 200% de texto, pantallas autenticadas, QR, TalkBack e instalación en teléfono físico: PENDIENTES. John indicó que conectaría el teléfono; ADB aún no lo detectaba al revisar.
-- No se hizo merge, deploy ni flasheo. El siguiente agente debe verificar CI del HEAD de este handoff y completar los pendientes antes de afirmar listo.
+Ámbito SMARTVEST, modo aislado. Emulador `SmartVest_UI` (`emulator-5554`), API 35, 1080×1920 con densidad 420. El AVD guarda 320×640 a 160 dpi; la sesión de prueba usa ese tamaño solo como base y la presentación en 1080×1920. No se borró el AVD ni se volvió a apuntar el SDK al SSD.
+
+### Qué cambió en la interfaz
+
+- El error de acceso distingue credenciales, límite de intentos, error del laboratorio y falta de conexión. Un HTTP 401 ya no se presenta como “No se pudo conectar”.
+- Perfiles deja de ser una pila de chips: cada persona es una tarjeta, con el chaleco vinculado o no, y las acciones quedan bajo la tarjeta elegida.
+- Historial vacío explica el estado y vuelve a Monitoreo. El aviso de laboratorio vive en Monitoreo, no en las tres pestañas.
+- El nombre del perfil puede ocupar varias líneas. Los diálogos de perfil, vinculación y QR limitan su altura y se desplazan, con espacio al final para que el último campo quede sobre los botones.
+- El listado deja 64 dp libres al final para que el último texto pueda subir por encima de la barra de navegación con texto grande o pantalla compacta.
+- El teclado del acceso avanza de usuario a contraseña y envía con Listo.
+
+### Pruebas hechas
+
+| Prueba | Resultado |
+| --- | --- |
+| Acceso en el emulador con cuenta PRUEBA ya creada | Llegó a Monitoreo con el perfil “PRUEBA UX — Sin chaleco”. Un envío largo de una sola vez por ADB recortó el usuario; no es un límite de la app. |
+| Error de credenciales | Texto visible: “Usuario o contraseña incorrectos.” Contraseña oculta. Captura `login-error-100.png`. |
+| Monitoreo, Perfiles, Historial, editar, vincular y consentimiento QR | Abiertos en el emulador. No se guardó un cambio, no se envió un código de chaleco y no se generó un QR. |
+| Texto 200% | Pestañas, Vincular, QR y el aviso de laboratorio quedan completos al desplazar. El diálogo de edición muestra Observaciones por encima de Guardar. |
+| Pantalla compacta 720×1280 | Vincular, QR y el aviso de laboratorio quedan completos al desplazar. |
+| Cierre de sesión | El control “Cerrar sesión” vuelve a la pantalla de acceso, con los campos vacíos. |
+| Firma del APK en el emulador | Actualización con `adb install -r`. Paquete `com.ajtecnology.smartvest`. La firma no cambió. |
+| Laboratorio HTTPS | Readiness, registro, login y perfil PRUEBA ya respondieron 200/201 con TLS verificado en la pasada anterior. No se vinculó hardware ni se inventó telemetría. |
+| Teléfono físico | ADB solo veía el emulador. No se instaló en el Redmi. |
+| TalkBack | El servicio existe. Al activarlo, Android cubrió la app con un permiso del sistema y se desactivó enseguida. No hay recorrido de gestos. El árbol de accesibilidad sí tiene “Cerrar sesión”, las pestañas, el perfil seleccionado y el error de acceso. La región en vivo asertiva está solo en la tarjeta de SOS, no en cada lectura. |
+
+Capturas saneadas en `docs/testing/screenshots/`. No incluyen contraseña, token ni QR generado.
+
+### Lo que esto no acredita
+
+M1 no está aceptado. Siguen abiertos SC-001 a SC-005, el chaleco real, la prueba con la Mac apagada, la restauración, la firma en el teléfono que ya tiene la app y el recorrido TalkBack con gestos.

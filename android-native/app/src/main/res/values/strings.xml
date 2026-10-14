@@ -14,6 +14,10 @@
     <string name="switch_to_login">Ya tengo cuenta. Iniciar sesión</string>
     <string name="login_missing_fields">Escribe usuario y contraseña.</string>
     <string name="login_short_password">La contraseña del laboratorio tiene al menos 8 caracteres.</string>
+    <string name="login_wrong_credentials">Usuario o contraseña incorrectos.</string>
+    <string name="login_rate_limited">Demasiados intentos. Espera unos minutos y vuelve a intentar.</string>
+    <string name="login_lab_error">El laboratorio respondió con un error. Intenta de nuevo.</string>
+    <string name="login_no_connection">No se pudo conectar. Revisa tu conexión y vuelve a intentar.</string>
     <string name="logout_button">Cerrar sesión</string>
     <string name="lab_banner">Datos de prueba. Esta pantalla no sustituye las ayudas que la persona ya usa.</string>
     <string name="foreground_only_banner">Las alertas se consultan solo con esta pantalla abierta. Con la app cerrada no hay aviso.</string>
@@ -26,6 +30,7 @@
     <string name="sos_active_alert">SOS. El botón del chaleco está activo.</string>
     <string name="sos_detail">Es una observación del botón físico. Reconocerla aquí no apaga el chaleco.</string>
     <string name="sos_inactive">Sin SOS. La ausencia de este aviso no significa que la persona esté segura.</string>
+    <string name="history_sos_clear">Sin SOS</string>
     <string name="distance_unit">cm al obstáculo</string>
     <string name="battery_label">Batería</string>
     <string name="gps_label">GPS</string>
@@ -96,5 +101,6 @@
     <string name="vest_setup_title">Conecta el chaleco</string>
     <string name="vest_setup_body">El perfil está creado. Vincula el dispositivo con su código de un solo uso.</string>
     <string name="selected_person">Perfil seleccionado</string>
+    <string name="profile_card_selected">Seleccionado</string>
     <string name="reading_section">Lectura del sensor</string>
 </resources>

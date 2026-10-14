@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
@@ -37,7 +38,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ajtecnology.smartvest.R
+import com.ajtecnology.smartvest.data.ProfileDto
 import com.ajtecnology.smartvest.data.TelemetryReading
 import com.ajtecnology.smartvest.theme.BodyText
 import com.ajtecnology.smartvest.theme.CardBg
@@ -72,6 +74,7 @@ import com.ajtecnology.smartvest.theme.ClearGreen
 import com.ajtecnology.smartvest.theme.Inset
 import com.ajtecnology.smartvest.theme.MetaText
 import com.ajtecnology.smartvest.theme.Night
+import com.ajtecnology.smartvest.theme.Outline
 import com.ajtecnology.smartvest.theme.Paper
 import com.ajtecnology.smartvest.theme.Signal
 import com.ajtecnology.smartvest.theme.SosRed
@@ -126,7 +129,7 @@ fun MonitorScreen(
     ) { insets ->
         LazyColumn(
             modifier = modifier.fillMaxSize().padding(insets),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 64.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item {
@@ -187,97 +190,69 @@ fun MonitorScreen(
                     }
                     item {
                         Text(stringResource(R.string.foreground_only_banner), style = MaterialTheme.typography.bodyMedium, color = BodyText)
+                        Text(
+                            stringResource(R.string.lab_banner),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MetaText,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                 }
                 1 -> {
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = CardBg)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = stringResource(R.string.assisted_person),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = Night
-                    )
                     if (profiles.isEmpty()) {
-                        Text(stringResource(R.string.no_profiles), color = MetaText, fontSize = 16.sp)
+                        item {
+                            SetupCard(
+                                stringResource(R.string.no_profile_title),
+                                stringResource(R.string.no_profile_body),
+                                stringResource(R.string.new_profile)
+                            ) { showCreateProfileDialog = true }
+                        }
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            profiles.forEach { profile ->
-                                val selected = profile.id == selectedProfile?.id
-                                val description = if (selected) {
-                                    stringResource(R.string.selected_profile, profile.presentationName)
-                                } else {
-                                    profile.presentationName
+                        item {
+                            WideButton(stringResource(R.string.new_profile), Signal) { showCreateProfileDialog = true }
+                        }
+                        items(profiles, key = { "profile-${it.id}" }) { profile ->
+                            ProfileCard(
+                                profile = profile,
+                                isSelected = profile.id == selectedProfile?.id,
+                                onClick = { viewModel.selectProfile(profile) }
+                            )
+                        }
+                        selectedProfile?.let { profile ->
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (profile.deviceId.isNullOrBlank()) {
+                                        WideButton(stringResource(R.string.pair_button), Signal) { showPairDialog = true }
+                                    }
+                                    WideButton(stringResource(R.string.edit_profile), Signal, outlined = true) {
+                                        showEditProfileDialog = true
+                                    }
+                                    WideButton(stringResource(R.string.qr_button), Signal, outlined = true) { showQrDialog = true }
+                                    TextButton(
+                                        onClick = { showDeleteDialog = true },
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                    ) {
+                                        Text(stringResource(R.string.remove_profile), color = SosRed, fontSize = 16.sp)
+                                    }
+                                    Text(stringResource(R.string.profile_private_note), color = MetaText, style = MaterialTheme.typography.bodyMedium)
                                 }
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = { viewModel.selectProfile(profile) },
-                                    label = { Text(profile.presentationName, fontSize = 16.sp) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 48.dp)
-                                        .semantics { contentDescription = description }
-                                )
                             }
                         }
                     }
-                    selectedProfile?.let { profile ->
-                        Text(
-                            text = if (profile.deviceId.isNullOrBlank()) {
-                                stringResource(R.string.vest_unlinked)
-                            } else {
-                                stringResource(R.string.vest_linked, profile.deviceId)
-                            },
-                            color = if (profile.deviceId.isNullOrBlank()) WarnOrange else ClearGreen,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
-                        profile.emergencyPhone?.takeIf { it.isNotBlank() }?.let {
-                            Text(stringResource(R.string.profile_phone_label) + ": " + it, color = BodyText, fontSize = 16.sp)
-                        }
-                        profile.bloodType?.takeIf { it.isNotBlank() }?.let {
-                            Text(stringResource(R.string.profile_blood_label) + ": " + it, color = BodyText, fontSize = 16.sp)
-                        }
-                        Text(stringResource(R.string.profile_private_note), color = MetaText, fontSize = 14.sp)
-                    }
-                    WideButton(stringResource(R.string.new_profile), Signal) { showCreateProfileDialog = true }
-                    if (selectedProfile != null) {
-                        WideButton(stringResource(R.string.edit_profile), Signal, outlined = true) {
-                            showEditProfileDialog = true
-                        }
-                        if (selectedProfile?.deviceId.isNullOrBlank()) {
-                            WideButton(stringResource(R.string.pair_button), Signal, outlined = true) {
-                                showPairDialog = true
-                            }
-                        }
-                        WideButton(stringResource(R.string.qr_button), Signal) { showQrDialog = true }
-                        WideButton(stringResource(R.string.remove_profile), SosRed, outlined = true) {
-                            showDeleteDialog = true
-                        }
-                    }
-                }
-            }
-        }
                 }
                 2 -> {
                     if (selectedProfile != null) {
                         item { Text(selectedProfile!!.presentationName, style = MaterialTheme.typography.titleMedium, color = Signal) }
                     }
-        item {
-            Text(
-                text = stringResource(R.string.history_title),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Night
-            )
-            if (history.isEmpty()) {
-                Text(stringResource(R.string.history_empty), color = MetaText, fontSize = 16.sp)
-            }
-        }
+                    if (history.isEmpty()) {
+                        item {
+                            SetupCard(
+                                stringResource(R.string.history_title),
+                                stringResource(R.string.history_empty),
+                                stringResource(R.string.tab_monitor)
+                            ) { destination = 0 }
+                        }
+                    }
         items(history, key = { it.id }) { item ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -291,7 +266,7 @@ fun MonitorScreen(
                         fontSize = 16.sp
                     )
                     Text(
-                        text = if (item.sosActive) stringResource(R.string.sos_active_alert) else stringResource(R.string.sos_inactive),
+                        text = if (item.sosActive) stringResource(R.string.sos_active_alert) else stringResource(R.string.history_sos_clear),
                         color = if (item.sosActive) SosRed else MetaText,
                         fontSize = 14.sp
                     )
@@ -310,7 +285,6 @@ fun MonitorScreen(
         }
                 }
             }
-            item { Text(stringResource(R.string.lab_banner), style = MaterialTheme.typography.bodyMedium, color = MetaText) }
         }
     }
 
@@ -357,6 +331,43 @@ fun MonitorScreen(
             onDismiss = { showDeleteDialog = false },
             onConfirm = { onDone -> viewModel.deleteProfile(onDone) }
         )
+    }
+}
+
+@Composable
+private fun ProfileCard(profile: ProfileDto, isSelected: Boolean, onClick: () -> Unit) {
+    val vest = if (profile.deviceId.isNullOrBlank()) {
+        stringResource(R.string.vest_unlinked)
+    } else {
+        stringResource(R.string.vest_linked, profile.deviceId)
+    }
+    val spoken = if (isSelected) {
+        stringResource(R.string.selected_profile, profile.presentationName) + ". " + vest
+    } else {
+        profile.presentationName + ". " + vest
+    }
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                selected = isSelected
+                contentDescription = spoken
+            },
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) Signal else Outline),
+        colors = CardDefaults.cardColors(containerColor = if (isSelected) Inset else CardBg)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (isSelected) {
+                Text(stringResource(R.string.profile_card_selected), style = MaterialTheme.typography.bodyMedium, color = Signal)
+            }
+            Text(profile.presentationName, style = MaterialTheme.typography.titleMedium, color = Night)
+            Text(vest, color = if (profile.deviceId.isNullOrBlank()) WarnOrange else ClearGreen, style = MaterialTheme.typography.bodyLarge)
+            profile.emergencyPhone?.takeIf { it.isNotBlank() }?.let {
+                Text(stringResource(R.string.profile_phone_label) + ": " + it, color = BodyText, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
     }
 }
 

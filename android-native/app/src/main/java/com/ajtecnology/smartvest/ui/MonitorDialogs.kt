@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,12 +54,13 @@ fun ProfileFormDialog(
     var saving by remember { mutableStateOf(false) }
     val nameRequired = stringResource(R.string.profile_name_required)
     val saveError = stringResource(R.string.profile_save_error)
+    val scrollMax = (LocalConfiguration.current.screenHeightDp * 0.42f).dp
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(title) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Column(modifier = Modifier.heightIn(max = scrollMax).verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.profile_private_note), color = BodyText, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
@@ -66,7 +68,7 @@ fun ProfileFormDialog(
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.profile_name_label)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    maxLines = 3
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
@@ -94,6 +96,7 @@ fun ProfileFormDialog(
                 if (error != null) {
                     Text(error!!, color = SosRed, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         },
         confirmButton = {
@@ -136,12 +139,13 @@ fun PairDeviceDialog(
     var error by remember { mutableStateOf<String?>(null) }
     var pairing by remember { mutableStateOf(false) }
     val pairError = stringResource(R.string.pair_error)
+    val scrollMax = (LocalConfiguration.current.screenHeightDp * 0.42f).dp
 
     AlertDialog(
         onDismissRequest = { if (!pairing) onDismiss() },
         title = { Text(stringResource(R.string.pair_title)) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Column(modifier = Modifier.heightIn(max = scrollMax).verticalScroll(rememberScrollState())) {
                 Text(stringResource(R.string.pair_help), color = BodyText, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
@@ -163,6 +167,7 @@ fun PairDeviceDialog(
                 if (error != null) {
                     Text(error!!, color = SosRed, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         },
         confirmButton = {
@@ -206,6 +211,7 @@ fun QrShareDialog(
     var revoked by remember { mutableStateOf(false) }
     val needField = stringResource(R.string.qr_need_field)
     val qrError = stringResource(R.string.qr_error)
+    val scrollMax = (LocalConfiguration.current.screenHeightDp * 0.46f).dp
 
     AlertDialog(
         onDismissRequest = { if (!working) onDismiss() },
@@ -214,6 +220,7 @@ fun QrShareDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = scrollMax)
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(stringResource(R.string.qr_help), color = BodyText, fontSize = 14.sp)
@@ -296,6 +303,7 @@ fun QrShareDialog(
                         Text(stringResource(R.string.revoke_qr_button))
                     }
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         },
         confirmButton = {
