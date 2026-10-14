@@ -61,11 +61,11 @@ Registrar dispositivo, Android, commit/APK, capturas saneadas y cada resultado. 
 | Cierre de sesión | El control “Cerrar sesión” vuelve a la pantalla de acceso, con los campos vacíos. |
 | Firma del APK en el emulador | Actualización con `adb install -r`. Paquete `com.ajtecnology.smartvest`. La firma no cambió. |
 | Laboratorio HTTPS | Readiness, registro, login y perfil PRUEBA ya respondieron 200/201 con TLS verificado en la pasada anterior. No se vinculó hardware ni se inventó telemetría. |
-| Teléfono físico | ADB solo veía el emulador. No se instaló en el Redmi. |
+| Teléfono físico | Redmi Note 9, Android 12, serie `1029ed7d0410`. La versión 31 se instaló encima de la 26. Paquete `com.ajtecnology.smartvest`, firma `51ed3f60`. La fecha de la primera instalación sigue siendo 2026-09-19. No se abrió la interfaz en el teléfono en este paso. |
 | TalkBack | El servicio quedó enlazado y el motor de voz habló. En acceso, el orden del árbol es marca, bienvenida, usuario, contraseña, mostrar contraseña, iniciar sesión y crear cuenta. “Cerrar sesión” tiene descripción. La pestaña elegida marca como seleccionado el nodo que contiene su nombre. El error de acceso es una región en vivo educada. La región asertiva sigue solo en la tarjeta de SOS. No se recorrió cada control con gestos ni se anunció una lectura, porque no hay telemetría. |
 
 Capturas saneadas en `docs/testing/screenshots/`. No incluyen contraseña, token ni QR generado.
 
 ### Lo que esto no acredita
 
-M1 no está aceptado. Siguen abiertos SC-001 a SC-005, el chaleco real, la prueba con la Mac apagada, la restauración y la firma en el teléfono que ya tiene la app. El Redmi no apareció en ADB en esta pasada. TalkBack habló en el emulador; falta el recorrido de gestos en el teléfono.
+M1 no está aceptado. Siguen abiertos SC-001 a SC-004, el chaleco real, la prueba con la Mac apagada y la restauración. En el Redmi la versión 31 quedó instalada como actualización, con la misma firma. Falta abrir esa versión en el teléfono y el recorrido TalkBack con gestos.
