@@ -24,8 +24,15 @@ with sync_playwright() as p:
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('request', lambda request: requests.append(request.url))
     page.route('https://tile.openstreetmap.org/**', lambda route: route.fulfill(status=200, content_type='image/png', body=png))
-    page.set_content(html, wait_until='networkidle')
-    page.evaluate("() => { L.Map.addInitHook(function () { window.PRUEBA_map = this; window.PRUEBA_instances = (window.PRUEBA_instances || 0) + 1; }); }")
+    hook = "L.Map.addInitHook(function () { window.PRUEBA_map = this; window.PRUEBA_instances = (window.PRUEBA_instances || 0) + 1; });"
+    test_html = html.replace('<script>' + (assets / 'location.js').read_text(), '<script>' + hook + (assets / 'location.js').read_text())
+    page.set_content(test_html, wait_until='networkidle')
+    # The actual reported bug: the map must render before any GPS fix arrives.
+    page.locator('#map .leaflet-tile-loaded').first.wait_for(state='attached')
+    assert page.evaluate('PRUEBA_instances') == 1
+    assert page.locator('.leaflet-interactive').count() == 0
+    assert page.locator('#map-center').is_disabled()
+    assert page.locator('#map').bounding_box()['height'] >= 200
     page.evaluate("smartvestSetLocation(0.123456,-79.123456,'#1E40AF')")
     page.wait_for_load_state('networkidle')
     page.locator('#map .leaflet-tile-loaded').first.wait_for(state='attached')
@@ -65,6 +72,14 @@ with sync_playwright() as p:
     # Portrait/compact viewport never collapses the map or hides attribution.
     page.set_viewport_size({'width': 320, 'height': 280})
     assert page.locator('#map').bounding_box()['height'] >= 200
+    # A different device without GPS clears the pin and does not inherit the old position.
+    page.evaluate('smartvestClearLocation()')
+    assert page.locator('.leaflet-interactive').count() == 0
+    assert page.locator('#map-center').is_disabled()
+    assert page.evaluate('PRUEBA_instances') == 1
+    page.evaluate("smartvestSetLocation(0.123456,-79.123456,'#1E40AF')")
+    assert page.locator('.leaflet-interactive').count() == 1
+    assert page.locator('#map-center').is_enabled()
     assert not errors, errors
     assert all(re.match(r'https://tile\.openstreetmap\.org/', url) for url in requests), requests
     browser.close()

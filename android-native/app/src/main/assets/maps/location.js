@@ -17,31 +17,47 @@
     notice.textContent = '';
     retry.hidden = true;
   }
+  function ensureMap() {
+    if (map) return;
+    // A world overview is a viewport, never a reported vest position.
+    map = L.map('map', {zoomControl: true, scrollWheelZoom: false}).setView([0, 0], 1);
+    tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+    });
+    tiles.on('loading', pending);
+    tiles.on('tileload', function () { if (!tileFailed) loaded(); });
+    tiles.on('tileerror', function () {
+      tileFailed = true;
+      clearTimeout(waiting);
+      notice.textContent = 'No se pudo cargar parte del mapa. Comprueba la conexión.';
+      retry.hidden = false;
+    });
+    tiles.addTo(map);
+    map.on('dragstart', function () { follow = false; });
+    pending();
+  }
+  window.smartvestClearLocation = function () {
+    ensureMap();
+    if (marker) { marker.remove(); marker = null; }
+    point = null;
+    follow = true;
+    recenter.disabled = true;
+    document.getElementById('map').setAttribute('aria-label', 'Mapa general. Sin ubicación GPS del chaleco');
+    map.setView([0, 0], 1, {animate: false});
+  };
   window.smartvestSetLocation = function (latitude, longitude, color) {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
         latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return;
+    ensureMap();
     point = [latitude, longitude];
-    if (!map) {
-      map = L.map('map', {zoomControl: true, scrollWheelZoom: false}).setView(point, 16);
-      tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
-      });
-      tiles.on('loading', pending);
-      tiles.on('tileload', function () { if (!tileFailed) loaded(); });
-      tiles.on('tileerror', function () {
-        tileFailed = true;
-        clearTimeout(waiting);
-        notice.textContent = 'No se pudo cargar parte del mapa. La ubicación sigue disponible.';
-        retry.hidden = false;
-      });
-      tiles.addTo(map);
-      map.on('dragstart', function () { follow = false; });
-      marker = L.circleMarker(point, {radius: 9, color: '#fff', weight: 3, fillOpacity: 1}).addTo(map);
-      pending();
-    }
+    var firstFix = !marker;
+    if (firstFix) marker = L.circleMarker(point, {radius: 9, color: '#fff', weight: 3, fillOpacity: 1}).addTo(map);
     marker.setLatLng(point).setStyle({fillColor: /^#[0-9a-f]{6}$/i.test(color) ? color : '#1E40AF'});
-    if (follow) map.panTo(point, {animate: false});
+    recenter.disabled = false;
+    document.getElementById('map').setAttribute('aria-label', 'Mapa de la última ubicación recibida del chaleco');
+    if (firstFix) map.setView(point, 16, {animate: false});
+    else if (follow) map.panTo(point, {animate: false});
     map.invalidateSize({pan: false});
   };
   retry.addEventListener('click', function () {
@@ -59,5 +75,6 @@
   if (window.ResizeObserver) new ResizeObserver(function () {
     if (map) map.invalidateSize({pan: false});
   }).observe(document.getElementById('map'));
+  ensureMap();
   window.addEventListener('pagehide', function () { clearTimeout(waiting); });
 })();

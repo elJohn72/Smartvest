@@ -24,7 +24,7 @@ import com.ajtecnology.smartvest.theme.*
 /** The WebView loads the bundled engine once; polling moves the marker without navigation. */
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
-fun EmbeddedLocationMap(point: MapLocation, modifier: Modifier = Modifier, color: String = "#1E40AF") {
+fun EmbeddedLocationMap(point: MapLocation?, modifier: Modifier = Modifier, color: String = "#1E40AF") {
     val context = LocalContext.current
     val document = remember(context) {
         fun asset(name: String) = context.assets.open("maps/$name").bufferedReader().use { it.readText() }
@@ -71,8 +71,8 @@ private class LocationWebView(context: android.content.Context) : WebView(contex
     var ready = false
     private var pending: String? = null
     private var applied: String? = null
-    fun updateLocation(point: MapLocation, color: String) {
-        pending = locationUpdateScript(point, color)
+    fun updateLocation(point: MapLocation?, color: String) {
+        pending = if (point == null) "window.smartvestClearLocation();" else locationUpdateScript(point, color)
         applyLocation()
     }
     fun applyLocation() {
@@ -103,7 +103,10 @@ fun LocationMapCard(reading: TelemetryReading) {
             } else {
                 Text(if (current != null) "Última ubicación recibida" else "Última ubicación recibida · sin fijación GPS actual", color = BodyText)
                 Text(gpsLabel(true, point.latitude, point.longitude), color = BodyText)
-                EmbeddedLocationMap(point, Modifier.fillMaxWidth().height(280.dp).clip(RoundedCornerShape(16.dp)), if (reading.sosActive) "#B91C1C" else "#1E40AF")
+            }
+            // The basemap is visible even before the vest obtains its first GPS fix.
+            EmbeddedLocationMap(point, Modifier.fillMaxWidth().height(280.dp).clip(RoundedCornerShape(16.dp)), if (reading.sosActive) "#B91C1C" else "#1E40AF")
+            if (point != null) {
                 OutlinedButton(onClick = {
                     val uri = Uri.parse("geo:${point.latitude},${point.longitude}?q=${point.latitude},${point.longitude}")
                     try { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: ActivityNotFoundException) { unavailable = true }
