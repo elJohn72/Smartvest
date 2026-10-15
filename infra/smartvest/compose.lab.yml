@@ -1,0 +1,48 @@
+services:
+  smartvest-api:
+    build:
+      context: ../../
+      dockerfile: infra/smartvest/Dockerfile
+    restart: unless-stopped
+    environment:
+      - DB_HOST=smartvest-db
+      - DB_PORT=3306
+      - DB_NAME=smartvest
+      - DB_USER=smartvest_user
+      - DB_PASSWORD=smartvest_lab_password
+      - TZ=UTC
+    ports:
+      - "${SMARTVEST_LAB_HTTP_PORT:-18080}:80"
+    networks:
+      - smartvest-lab-net
+    depends_on:
+      smartvest-db:
+        condition: service_healthy
+
+  smartvest-db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=smartvest_root_secret
+      - MYSQL_DATABASE=smartvest
+      - MYSQL_USER=smartvest_user
+      - MYSQL_PASSWORD=smartvest_lab_password
+      - TZ=UTC
+    volumes:
+      - smartvest-db-data:/var/lib/mysql
+      - ../../api/migrations/001_native.sql:/docker-entrypoint-initdb.d/001_native.sql:ro
+      - ../../tests/fixtures/PRUEBA/seed.sql:/docker-entrypoint-initdb.d/002_seed.sql:ro
+    networks:
+      - smartvest-lab-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  smartvest-lab-net:
+    driver: bridge
+
+volumes:
+  smartvest-db-data:

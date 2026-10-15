@@ -1,6 +1,9 @@
 #include <Arduino.h>
+#include "telemetry_outbox.h"
+#include "wifi_provision.h"
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 #if __has_include("smartvest_config.h")
 #include "smartvest_config.h"
@@ -94,6 +97,11 @@ bool sosPressed = false;
 bool sosEdgeLatched = false;
 int batteryLevel = -1;
 
+// Identificadores de secuencia monotónica y arranque (Contrato v1)
+char bootId[37] = {0};
+unsigned long telemetrySequence = 0;
+char currentSosEventId[37] = {0};
+
 AlertPattern currentPattern;
 unsigned long patternStartedAt = 0;
 unsigned long lastDistanceReadMs = 0;
@@ -110,6 +118,32 @@ constexpr float kDangerDistanceCm = 40.0f;
 constexpr float kAlertDistanceCm = 100.0f;
 constexpr float kCautionDistanceCm = 200.0f;
 
+struct TelemetryMessage {
+  unsigned long sequence;
+  float distanceCm;
+  bool gpsFix;
+  double latitude;
+  double longitude;
+  int batteryLevel;
+  bool sosActive;
+  char sosEventId[37];
+};
+
+struct SmsMessage {
+  char text[160];
+};
+
+static QueueHandle_t telemetryQueue = nullptr;
+static QueueHandle_t smsQueue = nullptr;
+static TaskHandle_t networkTaskHandle = nullptr;
+static portMUX_TYPE sosMux = portMUX_INITIALIZER_UNLOCKED;
+static SosPending sosPolicy{};
+static TelemetryMessage sosHeld{};
+static bool sosHeldValid = false;
+static int sosBackoffMs = 2000;
+static unsigned long sosNextAttemptMs = 0;
+static constexpr int kSosPermanentLimit = 3;
+
 float measureDistanceCm();
 float measureDistanceCmFiltered();
 void processGpsStream();
@@ -122,7 +156,12 @@ void applyAlertPattern();
 void applySosAlertPattern();
 void updateBatteryLevel();
 void ensureWifiConnection();
-void publishTelemetryToApi();
+void enqueueTelemetryMessage();
+void networkTask(void* pvParameters);
+TelemetryHttpClass sendTelemetryHttp(const TelemetryMessage& msg);
+void makeEventId(char* out, size_t outLen);
+void fillTelemetryMessage(TelemetryMessage& msg, unsigned long sequence, bool sosActive, const char* eventId);
+void captureSosEdge();
 void printTelemetry();
 bool sendSms(const String& message);
 bool sendAtCommand(const char* command, const char* expected, unsigned long timeoutMs);
@@ -151,6 +190,7 @@ void setup() {
   }
 
   WiFi.mode(WIFI_STA);
+  startSmartVestWifiProvision();
 
   if (SMARTVEST_ENABLE_SIM800) {
     delay(1500);
@@ -159,10 +199,42 @@ void setup() {
     sendAtCommand("AT+CMGF=1", "OK", 2000);
   }
 
+  // Generar bootId criptográfico único para este ciclo de encendido (UUID v4 format)
+  uint8_t randBytes[16];
+  for (int i = 0; i < 16; i += 4) {
+    uint32_t r = esp_random();
+    memcpy(&randBytes[i], &r, 4);
+  }
+  randBytes[6] = (randBytes[6] & 0x0F) | 0x40; // Versión 4
+  randBytes[8] = (randBytes[8] & 0x3F) | 0x80; // Variante RFC 4122
+  snprintf(bootId, sizeof(bootId),
+           "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+           randBytes[0], randBytes[1], randBytes[2], randBytes[3],
+           randBytes[4], randBytes[5], randBytes[6], randBytes[7],
+           randBytes[8], randBytes[9], randBytes[10], randBytes[11],
+           randBytes[12], randBytes[13], randBytes[14], randBytes[15]);
+
+  // Crear colas acotadas para telemetría y SMS para no agotar RAM si la red o el módem caen
+  telemetryQueue = xQueueCreate(10, sizeof(TelemetryMessage));
+  smsQueue = xQueueCreate(3, sizeof(SmsMessage));
+  if (telemetryQueue != nullptr) {
+    xTaskCreatePinnedToCore(
+        networkTask,
+        "net_task",
+        8192,
+        nullptr,
+        1,
+        &networkTaskHandle,
+        0 // Ejecutar en Core 0, dejando Core 1 para el bucle crítico de sensores y alarmas
+    );
+  }
+
   Serial.println();
-  Serial.println("SmartVest PlatformIO iniciado");
+  Serial.println("SmartVest PlatformIO iniciado (Contrato v1 + TLS FreeRTOS Task)");
   Serial.print("deviceId=");
   Serial.println(SMARTVEST_DEVICE_ID);
+  Serial.print("bootId=");
+  Serial.println(bootId);
 }
 
 void loop() {
@@ -188,8 +260,10 @@ void loop() {
   sosPressed = digitalRead(Pins::sos) == LOW;
   if (sosPressed && !sosEdgeLatched) {
     sosEdgeLatched = true;
+    captureSosEdge();
 
-    if (SMARTVEST_ENABLE_SIM800) {
+    if (SMARTVEST_ENABLE_SIM800 && smsQueue != nullptr) {
+      SmsMessage smsMsg;
       String message = String("ALERTA SOS SmartVest\n") +
                        "deviceId: " + SMARTVEST_DEVICE_ID + "\n" +
                        "Distancia: " + String(currentDistanceCm, 0) + " cm\n";
@@ -203,14 +277,18 @@ void loop() {
         message += "GPS sin fix. Abre el perfil web del cuidador.";
       }
 
-      const bool smsOk = sendSms(message);
-      Serial.print("SMS SOS -> ");
-      Serial.println(smsOk ? "OK" : "FALLO");
+      strncpy(smsMsg.text, message.c_str(), sizeof(smsMsg.text) - 1);
+      smsMsg.text[sizeof(smsMsg.text) - 1] = '\0';
+
+      if (xQueueSend(smsQueue, &smsMsg, 0) != pdTRUE) {
+        Serial.println("SMS: cola llena, descartando SMS duplicado");
+      }
     }
   }
 
   if (!sosPressed) {
     sosEdgeLatched = false;
+    sos_note_release(&sosPolicy);
   }
 
   if (sosPressed) {
@@ -229,9 +307,10 @@ void loop() {
   const unsigned long httpInterval =
       sosPressed ? kHttpIntervalSosMs : SMARTVEST_HTTP_INTERVAL_MS;
 
-  if (SMARTVEST_WIFI_ENABLED && now - lastHttpPublishMs >= httpInterval) {
+  const bool labWifiReady = SMARTVEST_WIFI_ENABLED || WiFi.status() == WL_CONNECTED;
+  if (labWifiReady && now - lastHttpPublishMs >= httpInterval) {
     lastHttpPublishMs = now;
-    publishTelemetryToApi();
+    enqueueTelemetryMessage();
   }
 }
 
@@ -422,7 +501,7 @@ void updateBatteryLevel() {
 }
 
 void ensureWifiConnection() {
-  if (!SMARTVEST_WIFI_ENABLED || strlen(SMARTVEST_WIFI_SSID) == 0) {
+  if (smartVestPhoneProvidesWifi() || !SMARTVEST_WIFI_ENABLED || strlen(SMARTVEST_WIFI_SSID) == 0) {
     return;
   }
 
@@ -439,39 +518,212 @@ void ensureWifiConnection() {
   WiFi.begin(SMARTVEST_WIFI_SSID, SMARTVEST_WIFI_PASSWORD);
 }
 
-void publishTelemetryToApi() {
-  if (WiFi.status() != WL_CONNECTED || strlen(SMARTVEST_API_URL) == 0) {
+void makeEventId(char* out, size_t outLen) {
+  uint8_t randBytes[16];
+  for (int i = 0; i < 16; i += 4) {
+    uint32_t r = esp_random();
+    memcpy(&randBytes[i], &r, 4);
+  }
+  randBytes[6] = (randBytes[6] & 0x0F) | 0x40;
+  randBytes[8] = (randBytes[8] & 0x3F) | 0x80;
+  snprintf(out, outLen,
+           "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+           randBytes[0], randBytes[1], randBytes[2], randBytes[3],
+           randBytes[4], randBytes[5], randBytes[6], randBytes[7],
+           randBytes[8], randBytes[9], randBytes[10], randBytes[11],
+           randBytes[12], randBytes[13], randBytes[14], randBytes[15]);
+}
+
+void fillTelemetryMessage(TelemetryMessage& msg, unsigned long sequence, bool activeSos, const char* eventId) {
+  msg.sequence = sequence;
+  msg.distanceCm = currentDistanceCm;
+  msg.gpsFix = gpsState.fix;
+  msg.latitude = gpsState.latitude;
+  msg.longitude = gpsState.longitude;
+  msg.batteryLevel = batteryLevel;
+  msg.sosActive = activeSos;
+  if (eventId != nullptr) {
+    strncpy(msg.sosEventId, eventId, sizeof(msg.sosEventId) - 1);
+  } else {
+    msg.sosEventId[0] = '\0';
+  }
+  msg.sosEventId[sizeof(msg.sosEventId) - 1] = '\0';
+}
+
+void captureSosEdge() {
+  char eventId[40] = {0};
+  makeEventId(eventId, sizeof(eventId));
+  uint32_t sequence = static_cast<uint32_t>(telemetrySequence);
+  portENTER_CRITICAL(&sosMux);
+  const bool immediate = sos_capture_press(&sosPolicy, &sequence, eventId);
+  if (immediate) {
+    telemetrySequence = sequence;
+    fillTelemetryMessage(sosHeld, sosPolicy.sequence, true, sosPolicy.eventId);
+    sosHeldValid = true;
+    sosBackoffMs = 2000;
+    sosNextAttemptMs = 0;
+    strncpy(currentSosEventId, sosPolicy.eventId, sizeof(currentSosEventId) - 1);
+    currentSosEventId[sizeof(currentSosEventId) - 1] = '\0';
+  }
+  portEXIT_CRITICAL(&sosMux);
+}
+
+void enqueueTelemetryMessage() {
+  if (telemetryQueue == nullptr) return;
+
+  telemetrySequence++;
+
+  portENTER_CRITICAL(&sosMux);
+  const bool includeSos = sosPolicy.pending && !sosPolicy.abandoned;
+  char eventCopy[40] = {0};
+  if (includeSos) {
+    strncpy(eventCopy, sosPolicy.eventId, sizeof(eventCopy) - 1);
+  }
+  portEXIT_CRITICAL(&sosMux);
+
+  TelemetryMessage msg;
+  fillTelemetryMessage(msg, telemetrySequence, includeSos, includeSos ? eventCopy : "");
+
+  if (xQueueSend(telemetryQueue, &msg, 0) == pdTRUE) {
     return;
   }
 
+  TelemetryMessage dropped;
+  if (xQueueReceive(telemetryQueue, &dropped, 0) != pdTRUE) {
+    Serial.println("Telemetria descartada: cola llena");
+    return;
+  }
+  if (queue_full_decision(msg.sosActive, dropped.sosActive) == QUEUE_KEEP_OLDEST) {
+    if (xQueueSend(telemetryQueue, &dropped, 0) != pdTRUE) {
+      Serial.println("No se pudo reponer el SOS retenido");
+    }
+    return;
+  }
+  if (xQueueSend(telemetryQueue, &msg, 0) != pdTRUE) {
+    if (xQueueSend(telemetryQueue, &dropped, 0) != pdTRUE) {
+      Serial.println("Telemetria perdida al reponer la cola");
+    }
+  }
+}
+
+void noteSosHttp(const TelemetryMessage& msg, TelemetryHttpClass outcome) {
+  if (!msg.sosActive || msg.sosEventId[0] == '\0') {
+    return;
+  }
+  portENTER_CRITICAL(&sosMux);
+  if (sosPolicy.pending && strcmp(sosPolicy.eventId, msg.sosEventId) == 0) {
+    sos_apply_http(&sosPolicy, outcome, kSosPermanentLimit);
+    if (!sosPolicy.pending) {
+      sosHeldValid = false;
+      sosBackoffMs = 2000;
+      if (outcome == TELEMETRY_HTTP_SUCCESS) {
+        currentSosEventId[0] = '\0';
+      }
+    } else if (outcome == TELEMETRY_HTTP_TRANSIENT || outcome == TELEMETRY_HTTP_PERMANENT) {
+      sosBackoffMs = telemetry_backoff_ms(sosBackoffMs);
+      sosNextAttemptMs = millis() + static_cast<unsigned long>(sosBackoffMs);
+    }
+  }
+  portEXIT_CRITICAL(&sosMux);
+}
+
+void networkTask(void* pvParameters) {
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+
+  TelemetryMessage msg;
+  SmsMessage smsMsg;
+
+  while (true) {
+    if (smsQueue != nullptr && xQueueReceive(smsQueue, &smsMsg, 0) == pdTRUE) {
+      sendSms(String(smsMsg.text));
+    }
+
+    bool sosReady = false;
+    TelemetryMessage sosCopy{};
+    portENTER_CRITICAL(&sosMux);
+    if (sosHeldValid && sosPolicy.pending && millis() >= sosNextAttemptMs) {
+      sosCopy = sosHeld;
+      sosReady = true;
+    }
+    portEXIT_CRITICAL(&sosMux);
+
+    if (sosReady) {
+      TelemetryHttpClass outcome = TELEMETRY_HTTP_TRANSIENT;
+      if (WiFi.status() == WL_CONNECTED && strlen(SMARTVEST_API_URL) > 0) {
+        outcome = sendTelemetryHttp(sosCopy);
+      }
+      noteSosHttp(sosCopy, outcome);
+      vTaskDelay(pdMS_TO_TICKS(20));
+      continue;
+    }
+
+    if (xQueueReceive(telemetryQueue, &msg, pdMS_TO_TICKS(100)) == pdTRUE) {
+      if (WiFi.status() == WL_CONNECTED && strlen(SMARTVEST_API_URL) > 0) {
+        const TelemetryHttpClass outcome = sendTelemetryHttp(msg);
+        noteSosHttp(msg, outcome);
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+}
+
+TelemetryHttpClass sendTelemetryHttp(const TelemetryMessage& msg) {
   HTTPClient http;
-  http.begin(SMARTVEST_API_URL);
+  WiFiClientSecure secureClient;
+  WiFiClient plainClient;
+
+  bool isHttps = (strncmp(SMARTVEST_API_URL, "https://", 8) == 0);
+
+  if (isHttps) {
+#if defined(SMARTVEST_CA_CERT_PEM)
+    if (strlen(SMARTVEST_CA_CERT_PEM) == 0) {
+      Serial.println("HTTPS abortado: SMARTVEST_CA_CERT_PEM vacio");
+      return TELEMETRY_HTTP_PERMANENT;
+    }
+    secureClient.setCACert(SMARTVEST_CA_CERT_PEM);
+#else
+    Serial.println("HTTPS abortado: SMARTVEST_CA_CERT_PEM no definido");
+    return TELEMETRY_HTTP_PERMANENT;
+#endif
+    secureClient.setTimeout(4);
+    if (!http.begin(secureClient, SMARTVEST_API_URL)) {
+      Serial.println("HTTP begin TLS fallo");
+      return TELEMETRY_HTTP_TRANSIENT;
+    }
+  } else {
+    plainClient.setTimeout(4);
+    if (!http.begin(plainClient, SMARTVEST_API_URL)) {
+      Serial.println("HTTP begin plain fallo");
+      return TELEMETRY_HTTP_TRANSIENT;
+    }
+  }
+
+  http.setTimeout(4000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-SmartVest-Api-Key", SMARTVEST_IOT_API_KEY);
 
   String payload = String("{") +
                    "\"deviceId\":\"" + SMARTVEST_DEVICE_ID + "\"," +
-                   "\"distanceCm\":" + String(currentDistanceCm, 1) + "," +
-                   "\"latitude\":" + String(gpsState.fix ? gpsState.latitude : 0.0, 6) + "," +
-                   "\"longitude\":" + String(gpsState.fix ? gpsState.longitude : 0.0, 6) + "," +
-                   "\"sosActive\":" + String(sosPressed ? "true" : "false");
-
-  if (batteryLevel >= 0) {
-    payload += ",\"batteryLevel\":" + String(batteryLevel);
-  }
-
-  payload += "}";
+                   "\"bootId\":\"" + String(bootId) + "\"," +
+                   "\"sequence\":" + String(msg.sequence) + "," +
+                   "\"distanceCm\":" + (msg.distanceCm < 9000.0f ? String(msg.distanceCm, 1) : "null") + "," +
+                   "\"gpsFix\":" + (msg.gpsFix ? "true" : "false") + "," +
+                   "\"latitude\":" + (msg.gpsFix ? String(msg.latitude, 6) : "null") + "," +
+                   "\"longitude\":" + (msg.gpsFix ? String(msg.longitude, 6) : "null") + "," +
+                   "\"batteryLevel\":" + (msg.batteryLevel >= 0 ? String(msg.batteryLevel) : "null") + "," +
+                   "\"sosActive\":" + (msg.sosActive ? "true" : "false") + "," +
+                   "\"sosEventId\":" + (strlen(msg.sosEventId) > 0 ? ("\"" + String(msg.sosEventId) + "\"") : "null") +
+                   "}";
 
   const int responseCode = http.POST(payload);
   if (responseCode > 0) {
-    Serial.print("HTTP iot.php -> ");
-    Serial.println(responseCode);
+    Serial.printf("Telemetry HTTP v1 [%lu] -> %d\n", msg.sequence, responseCode);
   } else {
-    Serial.print("HTTP error -> ");
+    Serial.print("Telemetry HTTP error -> ");
     Serial.println(http.errorToString(responseCode));
   }
-
   http.end();
+  return classify_telemetry_http(responseCode);
 }
 
 void printTelemetry() {

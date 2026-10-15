@@ -2,11 +2,40 @@
 
 declare(strict_types=1);
 
-const DB_HOST = '127.0.0.1';
-const DB_PORT = '3306';
-const DB_NAME = 'smartvest';
-const DB_USER = 'root';
-const DB_PASSWORD = '';
+function get_db_config(): array
+{
+    // Soporte prioritario para variables de entorno (Compose / Coolify / PHP-FPM)
+    $host = getenv('DB_HOST') ?: (defined('DB_HOST') ? DB_HOST : null);
+    $port = getenv('DB_PORT') ?: (defined('DB_PORT') ? DB_PORT : '3306');
+    $name = getenv('DB_NAME') ?: (defined('DB_NAME') ? DB_NAME : null);
+    $user = getenv('DB_USER') ?: (defined('DB_USER') ? DB_USER : null);
+    $pass = getenv('DB_PASSWORD') !== false ? getenv('DB_PASSWORD') : (defined('DB_PASSWORD') ? DB_PASSWORD : null);
+
+    // Si falta alguna configuración obligatoria en producción/lab, no usar valores predeterminados inseguros
+    if ($host === null || $name === null || $user === null || $pass === null) {
+        // En entorno local estricto solo permitir si config.local.php las definió explícitamente
+        if (defined('SMARTVEST_ALLOW_LOCAL_DEV') && SMARTVEST_ALLOW_LOCAL_DEV === true) {
+            $host = $host ?? '127.0.0.1';
+            $port = $port ?? '3306';
+            $name = $name ?? 'smartvest';
+            $user = $user ?? 'root';
+            $pass = $pass ?? '';
+        } else {
+            json_response([
+                'success' => false,
+                'message' => 'Configuración de base de datos incompleta. Faltan variables de entorno DB_HOST, DB_NAME, DB_USER o DB_PASSWORD.',
+            ], 500);
+        }
+    }
+
+    return [
+        'host' => (string)$host,
+        'port' => (string)$port,
+        'name' => (string)$name,
+        'user' => (string)$user,
+        'pass' => (string)$pass,
+    ];
+}
 
 /** Clave por defecto solo para desarrollo local; sobrescribe en config.local.php */
 const SMARTVEST_IOT_API_KEY_DEFAULT = 'smartvest-local-dev-key';
@@ -63,11 +92,13 @@ function get_pdo(): PDO
         return $pdo;
     }
 
+    $cfg = get_db_config();
+
     try {
         $pdo = new PDO(
-            'mysql:host=' . DB_HOST . ';port=' . DB_PORT . ';dbname=' . DB_NAME . ';charset=utf8mb4',
-            DB_USER,
-            DB_PASSWORD,
+            'mysql:host=' . $cfg['host'] . ';port=' . $cfg['port'] . ';dbname=' . $cfg['name'] . ';charset=utf8mb4',
+            $cfg['user'],
+            $cfg['pass'],
             [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -76,7 +107,7 @@ function get_pdo(): PDO
     } catch (PDOException $exception) {
         json_response([
             'success' => false,
-            'message' => 'No se pudo conectar a MariaDB. Revisa api/config.php y crea la base smartvest.',
+            'message' => 'No se pudo conectar a MariaDB. Verifique las credenciales y conectividad con la base de datos.',
             'error' => $exception->getMessage(),
         ], 500);
     }

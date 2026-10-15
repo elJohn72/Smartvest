@@ -96,3 +96,7 @@ El chaleco envía datos por **HTTP POST** cada ~5 s. La web consulta el último 
 Proyecto académico / producto en evolución. Contacto de referencia en la landing: **contacto@smartvest.app**.
 
 **Documentación generada para la versión actual del código** (mayo 2026). Si cambias API o esquema, actualiza `database.sql`, `docs/API.md` y este README.
+
+## Próxima evolución: Android Kotlin y Coolify
+
+[Especificación y plan SDD](specs/002-android-native-coolify/README.md), propuesta del 2026-10-13 para revisión. Incluye app Android nativa, API protegida, contrato, modelo de datos, tareas y criterios de aceptación. No implica que el nuevo cliente o despliegue estén implementados.

@@ -28,29 +28,31 @@ Preferir el diff más pequeño correcto. No introducir frameworks o capas nuevas
 
 ## Restricciones técnicas
 
-- Frontend: Vite + React + TypeScript en raíz del repo (sin `src/`).
-- Base path: `/Smartvest/`.
-- Backend local: PHP + MariaDB vía XAMPP.
-- Firmware: PlatformIO bajo `firmware/esp32/platformio-smartvest/`; WiFi/API en `smartvest_config.h` (gitignored).
+ - Frontend: Vite + React + TypeScript en raíz del repo (sin `src/`).
+ - Android nativo: Kotlin + Jetpack Compose bajo `android-native/` con StateFlow y sin WebView.
+ - Base path: `/Smartvest/`.
+ - Backend local / laboratorio: PHP + MariaDB independiente, contenerizado para Coolify (proyecto SMARTVEST, entorno lab).
+ - Firmware: PlatformIO bajo `firmware/esp32/platformio-smartvest/`; WiFi/API en `smartvest_config.h` (gitignored), soporte TLS estricto.
 
-## Flujo de desarrollo (Spec Kit)
+ ## Flujo de desarrollo (Spec Kit)
 
-1. `/speckit-specify` — requisitos (qué/por qué).
-2. `/speckit-clarify` — opcional antes de plan.
-3. `/speckit-plan` — stack y fases.
-4. `/speckit-tasks` — tareas ordenadas.
-5. `/speckit-analyze` — opcional, consistencia spec/plan/tasks.
-6. `/speckit-implement` — ejecución.
-7. Checklist de feature + `npm run build` + deploy + `curl` API.
+ 1. `/speckit-specify` — requisitos (qué/por qué).
+ 2. `/speckit-clarify` — opcional antes de plan.
+ 3. `/speckit-plan` — stack y fases.
+ 4. `/speckit-tasks` — tareas ordenadas.
+ 5. `/speckit-analyze` — opcional, consistencia spec/plan/tasks.
+ 6. `/speckit-implement` — ejecución.
+ 7. Checklist de feature + pruebas automáticas + `git diff --check`.
 
-## Quality gates
+ ## Quality gates
 
-- Ningún release con GET de usuarios exponiendo passwords.
-- Ningún release con SOS activo en BD sin emergencia confirmada en demo.
-- Build verde antes de merge a `main`.
+ - Ningún release con GET de usuarios exponiendo passwords ni PII no autorizada.
+ - Ningún release con SOS activo en BD sin emergencia confirmada en demo/prueba física.
+ - Build verde y tests de contrato/autorización/Android antes de merge a `main`.
+ - Prohibido deploy directo al servidor sin PR verde y merge autorizado.
 
-## Governance
+ ## Governance
 
-Esta constitución prevalece sobre convenciones ad hoc. Enmiendas documentadas en commit con bump de versión menor. PRs y agentes deben verificar compliance con checklist de la feature activa en `specs/`.
+ Esta constitución prevalece sobre convenciones ad hoc. Enmiendas documentadas en commit con bump de versión menor. PRs y agentes deben verificar compliance con checklist de la feature activa en `specs/`.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-26 | **Last Amended**: 2026-05-26
+ **Version**: 1.1.0 | **Ratified**: 2026-05-26 | **Last Amended**: 2026-10-13

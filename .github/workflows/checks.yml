@@ -1,0 +1,158 @@
+name: SmartVest PR & Release Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  secrets_and_lint:
+    name: Secrets & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Audit Secrets
+        run: ./scripts/ci/check-secrets.sh
+
+      - name: Check Git Diff Check
+        run: git diff --check origin/main..HEAD
+
+  contracts_and_api:
+    name: OpenAPI Contract & MariaDB API Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: smartvest_root_secret
+          MARIADB_DATABASE: smartvest
+          MARIADB_USER: smartvest_user
+          MARIADB_PASSWORD: smartvest_lab_password
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=5s --health-timeout=3s --health-retries=10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate OpenAPI Contract
+        run: ./scripts/ci/check-contracts.sh
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql
+
+      - name: Execute Database Migrations
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: smartvest
+          DB_USER: smartvest_user
+          DB_PASSWORD: smartvest_lab_password
+        run: |
+          php api/migrations/migrate.php tests/fixtures/PRUEBA/seed.sql
+
+      - name: Run PHP Integration & Authorization Tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: smartvest
+          DB_USER: smartvest_user
+          DB_PASSWORD: smartvest_lab_password
+        run: php tests/api_integration_test.php
+
+  android_build:
+    name: Android Native Compose Build & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run Android Unit Tests & Assemble
+        working-directory: android-native
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest assembleDebug assembleRelease --no-daemon
+
+      - name: Upload Debug & Release APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartvest-android-apk
+          path: |
+            android-native/app/build/outputs/apk/debug/app-debug.apk
+            android-native/app/build/outputs/apk/release/app-release.apk
+
+  firmware_build:
+    name: ESP32 Firmware Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PlatformIO Core
+        run: pip install platformio
+
+      - name: Prepare Sample Configuration
+        working-directory: firmware/esp32/platformio-smartvest
+        run: cp include/smartvest_config.h.example include/smartvest_config.h
+
+      - name: Host test for SOS outbox policy
+        run: |
+          g++ -std=c++17 -I firmware/esp32/platformio-smartvest/include \
+            tests/firmware/telemetry_outbox_test.cpp -o /tmp/telemetry_outbox_test
+          /tmp/telemetry_outbox_test
+
+      - name: Compile ESP32 Firmware
+        working-directory: firmware/esp32/platformio-smartvest
+        run: pio run
+
+  coolify_stack:
+    name: Coolify Nginx PHP-FPM MariaDB Stack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Exercise the real lab containers
+        run: bash tests/coolify_stack_test.sh
+
+  embedded_map:
+    name: Embedded Map Rendering & Polling Regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated browser test runtime
+        run: |
+          python -m pip install playwright==1.60.0
+          python -m playwright install --with-deps chromium
+      - name: Render bundled map with PRUEBA tiles
+        run: python tests/map_rendering_test.py

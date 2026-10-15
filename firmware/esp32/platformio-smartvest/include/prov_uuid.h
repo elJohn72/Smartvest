@@ -1,0 +1,10 @@
+#pragma once
+
+#include <cstdint>
+
+// UUID little-endian del servicio Espressif que la app busca por Bluetooth.
+// 021a9004-0382-4aea-bff4-6b3f1b5adfb4
+static const uint8_t SMARTVEST_PROV_SERVICE_UUID_LE[16] = {
+    0xb4, 0xdf, 0x5a, 0x1b, 0x3f, 0x6b, 0xf4, 0xbf,
+    0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
+};
