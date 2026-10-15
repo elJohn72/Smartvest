@@ -500,20 +500,13 @@ private fun ReadingCard(reading: TelemetryReading, nowMs: Long) {
                     fontSize = 16.sp
                 )
                 Text(
-                    stringResource(R.string.gps_label) + ": " + gpsLabel(reading.gpsFix, reading.latitude, reading.longitude),
-                    color = BodyText,
-                    fontSize = 16.sp
-                )
-                Text(
                     stringResource(R.string.reading_age_label) + ": " + readingAgeLabel(nowMs, reading.lastUpdate),
                     color = BodyText,
                     fontSize = 16.sp
                 )
-                if (hasValidGps(reading.gpsFix, reading.latitude, reading.longitude)) {
-                    MapButton(reading.latitude!!, reading.longitude!!)
-                }
             }
         }
+        LocationMapCard(reading)
     }
 }
 

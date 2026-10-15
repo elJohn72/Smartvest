@@ -141,3 +141,18 @@ jobs:
 
       - name: Exercise the real lab containers
         run: bash tests/coolify_stack_test.sh
+
+  embedded_map:
+    name: Embedded Map Rendering & Polling Regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated browser test runtime
+        run: |
+          python -m pip install playwright==1.60.0
+          python -m playwright install --with-deps chromium
+      - name: Render bundled map with PRUEBA tiles
+        run: python tests/map_rendering_test.py
