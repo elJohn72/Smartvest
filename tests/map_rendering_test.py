@@ -45,9 +45,18 @@ with sync_playwright() as p:
     page.locator('#map-center').click()
     assert page.evaluate('PRUEBA_map.getCenter()') != before
     # Failure remains visible and the user can retry without remounting the map.
-    page.route('https://tile.openstreetmap.org/**', lambda route: route.abort())
+    failed_once = {'done': False}
+    def partially_failed_tiles(route):
+        if not failed_once['done']:
+            failed_once['done'] = True
+            route.abort()
+        else:
+            route.fulfill(status=200, content_type='image/png', body=png)
+    page.route('https://tile.openstreetmap.org/**', partially_failed_tiles)
     page.evaluate("PRUEBA_map.eachLayer(function (layer) { if (layer instanceof L.TileLayer) layer.redraw(); });")
     page.wait_for_function("!document.getElementById('map-retry').hidden")
+    page.wait_for_load_state('networkidle')
+    assert page.locator('#map-retry').is_visible()
     assert 'No se pudo' in page.locator('#map-status').inner_text()
     page.route('https://tile.openstreetmap.org/**', lambda route: route.fulfill(status=200, content_type='image/png', body=png))
     page.locator('#map-retry').click()

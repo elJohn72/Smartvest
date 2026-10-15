@@ -1,7 +1,7 @@
 // Runs inside the bundled map document. No account, device or person data is exposed here.
 (function () {
   'use strict';
-  var map, marker, tiles, point, follow = true, waiting;
+  var map, marker, tiles, point, follow = true, waiting, tileFailed = false;
   var notice = document.getElementById('map-status');
   var retry = document.getElementById('map-retry');
   var recenter = document.getElementById('map-center');
@@ -28,8 +28,9 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
       });
       tiles.on('loading', pending);
-      tiles.on('tileload', loaded);
+      tiles.on('tileload', function () { if (!tileFailed) loaded(); });
       tiles.on('tileerror', function () {
+        tileFailed = true;
         clearTimeout(waiting);
         notice.textContent = 'No se pudo cargar parte del mapa. La ubicación sigue disponible.';
         retry.hidden = false;
@@ -45,6 +46,7 @@
   };
   retry.addEventListener('click', function () {
     if (!tiles) return;
+    tileFailed = false;
     notice.textContent = 'Cargando mapa…';
     retry.hidden = true;
     pending();
