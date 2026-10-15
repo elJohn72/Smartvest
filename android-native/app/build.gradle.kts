@@ -13,8 +13,8 @@ android {
         applicationId = "com.ajtecnology.smartvest"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "1.2.4-m1-ui"
+        versionCode = 32
+        versionName = "1.3.0-m1-prov"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -84,8 +84,13 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    // QR generation
+    // QR generation and vest setup label
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.github.espressif:esp-idf-provisioning-android:lib-2.4.4")
+    implementation("org.greenrobot:eventbus:3.3.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

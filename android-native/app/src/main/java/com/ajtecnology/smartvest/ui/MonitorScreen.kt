@@ -99,6 +99,7 @@ fun MonitorScreen(
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showPairDialog by remember { mutableStateOf(false) }
     var showQrDialog by remember { mutableStateOf(false) }
+    var showInternetDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var destination by rememberSaveable { mutableIntStateOf(0) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -181,6 +182,11 @@ fun MonitorScreen(
                             }
                         } else {
                             item { MonitorStatus(state, true, nowMs) }
+                        }
+                        item {
+                            OutlinedButton(onClick = { showInternetDialog = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                                Text(stringResource(R.string.vest_internet_button))
+                            }
                         }
                         item {
                             OutlinedButton(onClick = { showQrDialog = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
@@ -313,6 +319,9 @@ fun MonitorScreen(
             onDismiss = { showPairDialog = false },
             onPair = { deviceId, code, onDone -> viewModel.pairDevice(deviceId, code, onDone) }
         )
+    }
+    if (showInternetDialog) {
+        VestInternetDialog(onDismiss = { showInternetDialog = false })
     }
     if (showQrDialog && selectedProfile != null) {
         QrShareDialog(

@@ -13,7 +13,7 @@ Propuesto: Jetpack Compose; conservar PHP/MariaDB; API v1 separada del legado; p
 
 M1: login/logout, alta de cuenta de laboratorio, alta/edición de perfil, vinculación controlada de chaleco provisionado, QR revocable, estado/distancia/batería/GPS/historial, SOS visible en primer plano, API segura y despliegue reproducible. APK firmado e instalable.
 M2: notificaciones push Android con proveedor propuesto FCM, worker duradero, reintentos y deduplicación. Proveedor/cuenta/costo/acceso pendientes de John. Sin M2 la app debe indicar que las alertas se consultan solo al abrirla.
-Fuera de alcance: iOS, Kotlin Multiplatform, BLE, cambio a MQTT, cámara/visión IA, nuevo hardware, órdenes remotas hacia el ESP32, SMS desde servidor, tienda pública y datos personales reales. El SMS SIM800L existente sigue independiente y no acredita entrega en la API.
+Fuera de alcance: iOS, Kotlin Multiplatform, cambio a MQTT, visión IA, nuevo hardware, órdenes remotas del servidor hacia el ESP32, SMS desde servidor, tienda pública y datos personales reales. El teléfono sí puede leer la etiqueta QR del chaleco y pasarle el Wi-Fi por Bluetooth. El SMS SIM800L existente sigue independiente y no acredita entrega en la API.
 
 ## Historias y aceptación
 
@@ -60,3 +60,12 @@ SC-006/M2: probar SOS, evento duplicado, worker reiniciado y notificaciones dene
 - **D6 (Proveedor M2)**: Diferido para M2 (fuera de M1).
 - **D7 (Retención)**: 7 días para historial de telemetría, 30 días para eventos/logs saneados, backups cifrados (7 diarios + 4 semanales).
 - **D8 (Enmienda constitucional)**: Aprobada versión 1.1.0 incorporando entorno cloud-lab Coolify, Android nativo Compose y checks automatizados de PR.
+
+## Alta inicial de Wi-Fi por BLE — criterios de aceptación
+
+- La cámara acepta exclusivamente la etiqueta SmartVest v1/BLE con nombre y prueba de posesión en su formato exacto. El QR de emergencia sigue siendo un flujo separado.
+- Se puede pegar la etiqueta sin conceder permiso de cámara. Bluetooth se solicita al enviar la red; cancelar libera el intento y permite reabrir el flujo.
+- Búsqueda máxima de 15 s y conexión/configuración máxima de 60 s, con error recuperable. Un resultado tardío no cambia un intento ya finalizado.
+- Contraseña Wi-Fi sin persistencia en Android, sin logs y fuera del QR. Sesión de aprovisionamiento Espressif SECURITY_1 con prueba de posesión. El ESP32 conserva la red localmente para reinicios.
+- Una clave Wi-Fi rechazada permite reintentar. “Wi-Fi configurado” no acredita acceso a la API: se exige telemetría reciente para comprobarlo.
+- Validar con el teléfono y chaleco reales, incluidos cancelación, denegación de permisos, contraseña incorrecta, reinicio y texto 200%. Pendiente el procedimiento físico para cambiar una red guardada; no se añade reset remoto.

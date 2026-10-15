@@ -103,4 +103,15 @@
     <string name="selected_person">Perfil seleccionado</string>
     <string name="profile_card_selected">Seleccionado</string>
     <string name="reading_section">Lectura del sensor</string>
+    <string name="vest_internet_button">Dar internet al chaleco</string>
+    <string name="vest_internet_title">Internet del chaleco</string>
+    <string name="vest_internet_help">Escanea la etiqueta del chaleco. El código trae el nombre Bluetooth y la clave de posesión. La contraseña del Wi-Fi se escribe aquí y no queda en el QR. Este código no es el de emergencia.</string>
+    <string name="vest_scan_qr">Escanear etiqueta</string>
+    <string name="vest_qr_paste">O pega el texto de la etiqueta</string>
+    <string name="vest_qr_use">Usar esta etiqueta</string>
+    <string name="vest_qr_rejected">Esa etiqueta no es de un chaleco SmartVest.</string>
+    <string name="vest_wifi_name">Nombre del Wi-Fi</string>
+    <string name="vest_wifi_password">Contraseña del Wi-Fi</string>
+    <string name="vest_wifi_send">Enviar al chaleco</string>
+    <string name="vest_permission_needed">No se concedió el permiso solicitado. Puedes habilitarlo en los ajustes de la aplicación.</string>
 </resources>

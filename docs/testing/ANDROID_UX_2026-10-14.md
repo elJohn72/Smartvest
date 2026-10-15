@@ -69,3 +69,19 @@ Capturas saneadas en `docs/testing/screenshots/`. No incluyen contraseña, token
 ### Lo que esto no acredita
 
 M1 no está aceptado. Siguen abiertos SC-001 a SC-004, el chaleco real, la prueba con la Mac apagada y la restauración. En el Redmi la versión 31 quedó instalada como actualización, con la misma firma. Falta abrir esa versión en el teléfono y el recorrido TalkBack con gestos.
+
+## Internet del chaleco por QR — 2026-10-14
+
+La versión compilada 1.3.0-m1-prov / código 32 añade “Dar internet al chaleco” en Monitoreo. La etiqueta usa los campos `ver`, `name`, `pop` y `transport`. El nombre debe ser `PROV_SmartVest_` seguido de cuatro dígitos hexadecimales en mayúsculas y el transporte debe ser `ble`. La clave de posesión se valida sin cambiar mayúsculas ni eliminar caracteres. Una etiqueta de otro equipo se rechaza. La contraseña del Wi-Fi se escribe en el teléfono y se envía por Bluetooth; no va dentro del QR. Esta etiqueta no es el QR de emergencia.
+
+El firmware compiló con aprovisionamiento Bluetooth y la partición `min_spiffs`. Al arrancar anuncia el chaleco si todavía no tiene una red guardada por el teléfono, e imprime una sola vez la línea `SMARTVEST:SETUP:` para armar la etiqueta. La red escrita en la configuración local no la usa este modo. No se flasheó la placa. El Redmi no estaba conectado al terminar esta pasada, así que el teléfono sigue en la versión 31. No hay etiqueta física ni prueba de cámara o Bluetooth en el aparato.
+
+### Correcciones de la revisión del aprovisionamiento
+
+- Intento Bluetooth cancelable, búsqueda limitada a 15 segundos y conexión/configuración limitada a 60 segundos. Se ignoran resultados tardíos del intento cancelado y se liberan referencias a las credenciales al terminar.
+- Cámara y Bluetooth se solicitan por separado. Al cerrar la cámara se retiran sus use cases y se cierra el executor. El lector respeta padding, pixel stride y posición del buffer de la cámara.
+- Contenido del diálogo desplazable y cancelación disponible durante el envío. El teclado de contraseña evita sugerencias de texto normal. La confirmación solo acredita configuración Wi-Fi; la telemetría reciente se comprueba en Monitoreo.
+- Una contraseña rechazada reinicia el estado de aprovisionamiento del ESP32 para permitir otro intento.
+- Pruebas unitarias de regresión para planos de cámara, buffers inválidos y rechazo de etiquetas alteradas o excesivas. Compilación release, lint sin Error/Fatal y política SOS verificados localmente; compilación del firmware sin flashear.
+
+Este flujo cubre el alta inicial de red. Cambiar una red ya guardada necesita un procedimiento físico seguro todavía pendiente de especificar y validar; no se implementó borrado remoto de credenciales. La prueba BLE de extremo a extremo, cámara física, credenciales incorrectas y cancelación/reintento con el chaleco siguen pendientes. La etiqueta contiene un secreto de posesión: no adjuntarla a capturas, logs compartidos ni al repositorio.

@@ -31,6 +31,22 @@ class MonitorStateLogicTest {
     }
 
     @Test
+    fun testVestSetupQrUsesTheSameFieldsAsATowerLabel() {
+        val raw = """{"ver":"v1","name":"PROV_SmartVest_70C4","pop":"A7K9M2PX","transport":"ble"}"""
+        val parsed = com.ajtecnology.smartvest.data.parseVestSetupQr(raw)
+        assertEquals("v1", parsed?.ver)
+        assertEquals("PROV_SmartVest_70C4", parsed?.name)
+        assertEquals("A7K9M2PX", parsed?.pop)
+        assertEquals("ble", parsed?.transport)
+        assertEquals(
+            null,
+            com.ajtecnology.smartvest.data.parseVestSetupQr(
+                """{"ver":"v1","name":"PROV_EcoGrow_70C4","pop":"A7K9M2PX","transport":"ble"}"""
+            )
+        )
+    }
+
+    @Test
     fun testStaleDataDetection() {
         val now = 100_000L
         val readingRecent = TelemetryReading(deviceId = "VEST-001", lastUpdate = now - 10_000L)

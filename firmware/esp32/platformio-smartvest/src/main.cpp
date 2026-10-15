@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "telemetry_outbox.h"
+#include "wifi_provision.h"
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -189,6 +190,7 @@ void setup() {
   }
 
   WiFi.mode(WIFI_STA);
+  startSmartVestWifiProvision();
 
   if (SMARTVEST_ENABLE_SIM800) {
     delay(1500);
@@ -305,7 +307,8 @@ void loop() {
   const unsigned long httpInterval =
       sosPressed ? kHttpIntervalSosMs : SMARTVEST_HTTP_INTERVAL_MS;
 
-  if (SMARTVEST_WIFI_ENABLED && now - lastHttpPublishMs >= httpInterval) {
+  const bool labWifiReady = SMARTVEST_WIFI_ENABLED || WiFi.status() == WL_CONNECTED;
+  if (labWifiReady && now - lastHttpPublishMs >= httpInterval) {
     lastHttpPublishMs = now;
     enqueueTelemetryMessage();
   }
@@ -498,7 +501,7 @@ void updateBatteryLevel() {
 }
 
 void ensureWifiConnection() {
-  if (!SMARTVEST_WIFI_ENABLED || strlen(SMARTVEST_WIFI_SSID) == 0) {
+  if (smartVestPhoneProvidesWifi() || !SMARTVEST_WIFI_ENABLED || strlen(SMARTVEST_WIFI_SSID) == 0) {
     return;
   }
 
