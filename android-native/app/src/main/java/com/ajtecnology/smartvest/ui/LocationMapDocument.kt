@@ -19,7 +19,8 @@ fun locationMapDocument(css: String, leaflet: String, controller: String): Strin
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https://tile.openstreetmap.org data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <style>$css
-html,body {height:100%;margin:0;background:#F8FAFC;font:14px sans-serif;color:#0F172A}
+html {height:100%;width:100%;margin:0}
+body {height:100vh;min-height:240px;margin:0;background:#F8FAFC;font:14px sans-serif;color:#0F172A}
 body {display:flex;flex-direction:column} #map {flex:1;min-height:0;width:100%}
 .toolbar {padding:6px 8px;background:#fff;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 button {min-height:44px;padding:6px 12px;background:#fff;border:1px solid #CBD5E1;border-radius:8px;color:#1E40AF;font:inherit}

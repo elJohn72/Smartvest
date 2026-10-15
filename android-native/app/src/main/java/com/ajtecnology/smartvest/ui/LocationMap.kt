@@ -34,6 +34,10 @@ fun EmbeddedLocationMap(point: MapLocation?, modifier: Modifier = Modifier, colo
         modifier = modifier,
         factory = { ctx ->
             LocationWebView(ctx).apply {
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
                 settings.javaScriptEnabled = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false

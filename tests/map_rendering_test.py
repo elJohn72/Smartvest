@@ -80,6 +80,9 @@ with sync_playwright() as p:
     page.evaluate("smartvestSetLocation(0.123456,-79.123456,'#1E40AF')")
     assert page.locator('.leaflet-interactive').count() == 1
     assert page.locator('#map-center').is_enabled()
+    # Android can initially report an unmeasured viewport; keep a usable map height.
+    page.set_viewport_size({'width': 360, 'height': 1})
+    assert page.locator('#map').bounding_box()['height'] > 100
     assert not errors, errors
     assert all(re.match(r'https://tile\.openstreetmap\.org/', url) for url in requests), requests
     browser.close()
