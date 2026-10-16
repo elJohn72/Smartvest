@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sessionStore = SessionStore(applicationContext)
         apiClient = ApiClient(sessionStore = sessionStore)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.parseColor("#0F172A")
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
 

@@ -341,6 +341,29 @@ class MainViewModel(
         else -> null
     }
 
+    fun loadAssistant(deviceId: String, onDone: (Result<AssistantResponse>) -> Unit) {
+        viewModelScope.launch {
+            val result = apiClient.askAssistant(deviceId, AssistantRequest(action = "analyze"))
+            if (result.exceptionOrNull()?.let { handleAuthFailure(it) } == true) return@launch
+            onDone(result)
+        }
+    }
+
+    fun sendAssistantChat(
+        deviceId: String,
+        messages: List<AssistantChatMessage>,
+        onDone: (Result<AssistantResponse>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = apiClient.askAssistant(
+                deviceId,
+                AssistantRequest(action = "chat", messages = messages)
+            )
+            if (result.exceptionOrNull()?.let { handleAuthFailure(it) } == true) return@launch
+            onDone(result)
+        }
+    }
+
     private fun handleAuthFailure(error: Throwable): Boolean {
         if (error.message != "UNAUTHORIZED") return false
         stopPolling()

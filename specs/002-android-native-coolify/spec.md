@@ -63,9 +63,12 @@ SC-006/M2: probar SOS, evento duplicado, worker reiniciado y notificaciones dene
 
 ## Alta inicial de Wi-Fi por BLE — criterios de aceptación
 
-- La cámara acepta exclusivamente la etiqueta SmartVest v1/BLE con nombre y prueba de posesión en su formato exacto. El QR de emergencia sigue siendo un flujo separado.
-- Se puede pegar la etiqueta sin conceder permiso de cámara. Bluetooth se solicita al enviar la red; cancelar libera el intento y permite reabrir el flujo.
+- Dar internet no pide etiqueta ni cámara. El teléfono busca el chaleco por Bluetooth, lo anuncia y solo pide el nombre y la contraseña del Wi-Fi. El QR de emergencia sigue siendo otro flujo.
 - Búsqueda máxima de 15 s y conexión/configuración máxima de 60 s, con error recuperable. Un resultado tardío no cambia un intento ya finalizado.
 - Contraseña Wi-Fi sin persistencia en Android, sin logs y fuera del QR. Sesión de aprovisionamiento Espressif SECURITY_1 con prueba de posesión. El ESP32 conserva la red localmente para reinicios.
 - Una clave Wi-Fi rechazada permite reintentar. “Wi-Fi configurado” no acredita acceso a la API: se exige telemetría reciente para comprobarlo.
 - Validar con el teléfono y chaleco reales, incluidos cancelación, denegación de permisos, contraseña incorrecta, reinicio y texto 200%. Pendiente el procedimiento físico para cambiar una red guardada; no se añade reset remoto.
+
+## Mejora diferida — etiqueta de vinculación
+
+John, 2026-10-14: no entra en la prueba en curso. El chaleco debe llevar impresos el nombre del dispositivo y un código único. La vinculación sigue siendo manual con esos dos datos. Si el chaleco ya estaba en otro perfil, al ingresar la etiqueta pasa al perfil nuevo y desaparece del anterior. Hoy FR-003 sigue siendo un código de un solo uso y corta duración; un dispositivo ya asignado responde conflicto y no se mueve solo.

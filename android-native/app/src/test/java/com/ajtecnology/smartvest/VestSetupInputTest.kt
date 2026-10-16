@@ -29,5 +29,8 @@ class VestSetupInputTest {
         assertNull(parseVestSetupQr(template.format("a7k9-m2px")))
         assertNull(parseVestSetupQr(template.format("A7K9M2P!")))
         assertNull(parseVestSetupQr(" ".repeat(1100) + template.format("A7K9M2PX")))
+        val serial = "SMARTVEST:SETUP:" + template.format("A7K9M2PX")
+        assertEquals("PROV_SmartVest_70C4", parseVestSetupQr(serial)?.name)
+        assertEquals("A7K9M2PX", parseVestSetupQr(serial)?.pop)
     }
 }

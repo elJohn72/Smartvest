@@ -12,6 +12,7 @@ require_once __DIR__ . '/../lib/session.php';
 require_once __DIR__ . '/../lib/authorization.php';
 require_once __DIR__ . '/../lib/rate_limit.php';
 require_once __DIR__ . '/../lib/telemetry_payload.php';
+require_once __DIR__ . '/../lib/assistant.php';
 
 use SmartVest\Lib\SessionManager;
 use SmartVest\Lib\Authorization;
@@ -799,6 +800,32 @@ if (preg_match('#^devices/([^/]+)/history$#', $path, $m) && $method === 'GET') {
     }, $rows);
 
     echo json_encode(['data' => $items]);
+    exit;
+}
+
+// ==============================================================================
+// 9. ASISTENTE: resumen de riesgo y chat (Groq solo en el servidor)
+// ==============================================================================
+if (preg_match('#^devices/([^/]+)/assistant$#', $path, $m) && $method === 'POST') {
+    $user = $sessionManager->authenticate(get_bearer_token());
+    if (!$user) {
+        http_response_code(401);
+        echo json_encode(['error' => ['code' => 'UNAUTHORIZED', 'message' => 'Sesión requerida.']]);
+        exit;
+    }
+    $deviceId = $m[1];
+    $profile = $auth->requireDeviceOwner($deviceId, $user['accountId']);
+    $blocked = smartvest_rate_gate($pdo, 'assistant', $user['accountId'], 30, 600, true);
+    if ($blocked !== null) {
+        smartvest_rate_limit_response($blocked);
+    }
+    $data = json_decode(file_get_contents('php://input') ?: '', true);
+    if (!is_array($data)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'JSON inválido.']);
+        exit;
+    }
+    smartvest_assistant_handle($pdo, $profile, $deviceId, $data);
     exit;
 }
 

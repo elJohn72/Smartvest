@@ -425,6 +425,46 @@ paths:
         '404':
           description: Dispositivo no encontrado o no autorizado
 
+  /devices/{deviceId}/assistant:
+    post:
+      summary: Resumen de riesgo y chat del asistente
+      operationId: askDeviceAssistant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [analyze, chat]
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string }
+                      content: { type: string }
+      responses:
+        '200':
+          description: Analítica y texto del asistente. La clave de Groq permanece en el servidor.
+        '400':
+          description: Solicitud inválida
+        '401':
+          description: No autorizado
+        '404':
+          description: Dispositivo no encontrado o no autorizado
+        '429':
+          description: Demasiadas consultas
+
   /devices/{deviceId}/telemetry:
     post:
       summary: Ingestión de telemetría física desde ESP32

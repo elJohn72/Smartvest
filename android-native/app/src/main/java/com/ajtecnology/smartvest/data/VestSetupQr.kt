@@ -21,9 +21,13 @@ private val setupJson = Json { ignoreUnknownKeys = true }
 fun parseVestSetupQr(raw: String): VestSetupQr? {
     if (raw.length > 1024) return null
     val trimmed = raw.trim()
-    if (trimmed.length > 1024 || !trimmed.startsWith("{")) return null
+    val start = trimmed.indexOf('{')
+    val end = trimmed.lastIndexOf('}')
+    if (start < 0 || end <= start) return null
+    val json = trimmed.substring(start, end + 1)
+    if (json.length > 1024) return null
     val parsed = try {
-        setupJson.decodeFromString<VestSetupQr>(trimmed)
+        setupJson.decodeFromString<VestSetupQr>(json)
     } catch (_: Exception) {
         return null
     }

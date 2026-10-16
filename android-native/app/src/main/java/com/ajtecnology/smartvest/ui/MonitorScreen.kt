@@ -14,12 +14,15 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,8 +30,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -66,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ajtecnology.smartvest.R
 import com.ajtecnology.smartvest.data.ProfileDto
+import com.ajtecnology.smartvest.data.TelemetryHistoryItem
 import com.ajtecnology.smartvest.data.TelemetryReading
 import com.ajtecnology.smartvest.theme.BodyText
 import com.ajtecnology.smartvest.theme.CardBg
@@ -111,12 +118,15 @@ fun MonitorScreen(
         }
     }
 
+    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
     Scaffold(
         containerColor = Paper,
         bottomBar = {
+            if (keyboardOpen) return@Scaffold
             NavigationBar(containerColor = CardBg, tonalElevation = 0.dp) {
-                val labels = listOf(R.string.tab_monitor, R.string.tab_profiles, R.string.tab_history)
-                val icons = listOf(Icons.Filled.Sensors, Icons.Filled.People, Icons.Filled.History)
+                val labels = listOf(R.string.tab_monitor, R.string.tab_profiles, R.string.tab_history, R.string.tab_assistant)
+                val icons = listOf(Icons.Filled.Sensors, Icons.Filled.People, Icons.Filled.History, Icons.Filled.AutoAwesome)
                 labels.forEachIndexed { index, label ->
                     NavigationBarItem(
                         selected = destination == index,
@@ -128,6 +138,38 @@ fun MonitorScreen(
             }
         }
     ) { insets ->
+        if (destination == 3) {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(insets)
+                    .imePadding()
+                    .padding(horizontal = 20.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                ) {
+                    Image(painterResource(R.mipmap.ic_smartvest), contentDescription = null, modifier = Modifier.size(36.dp))
+                    Text(
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Night,
+                        modifier = Modifier.weight(1f).padding(start = 10.dp)
+                    )
+                    IconButton(onClick = onLogoutClick, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.logout_button), tint = MetaText)
+                    }
+                }
+                AssistantPanel(
+                    profile = selectedProfile,
+                    viewModel = viewModel,
+                    nowMs = nowMs,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            return@Scaffold
+        }
         LazyColumn(
             modifier = modifier.fillMaxSize().padding(insets),
             contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 64.dp),
@@ -181,7 +223,7 @@ fun MonitorScreen(
                                     stringResource(R.string.pair_button)) { showPairDialog = true }
                             }
                         } else {
-                            item { MonitorStatus(state, true, nowMs) }
+                            item { MonitorStatus(state, true, nowMs, history) }
                         }
                         item {
                             OutlinedButton(onClick = { showInternetDialog = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
@@ -423,7 +465,12 @@ private fun WideButton(
 }
 
 @Composable
-private fun MonitorStatus(state: MonitorUiState, hasVest: Boolean, nowMs: Long) {
+private fun MonitorStatus(
+    state: MonitorUiState,
+    hasVest: Boolean,
+    nowMs: Long,
+    history: List<TelemetryHistoryItem>
+) {
     when (state) {
         is MonitorUiState.Loading -> {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -446,16 +493,20 @@ private fun MonitorStatus(state: MonitorUiState, hasVest: Boolean, nowMs: Long) 
                 NoticeCard(stringResource(R.string.status_no_connection), WarnSoft, WarnOrange)
                 state.lastReading?.let { reading ->
                     Text(stringResource(R.string.last_reading_kept), color = MetaText, fontSize = 14.sp)
-                    ReadingCard(reading, nowMs)
+                    ReadingCard(reading, nowMs, history)
                 }
             }
         }
-        is MonitorUiState.Ready -> ReadingCard(state.reading, nowMs)
+        is MonitorUiState.Ready -> ReadingCard(state.reading, nowMs, history)
     }
 }
 
 @Composable
-private fun ReadingCard(reading: TelemetryReading, nowMs: Long) {
+private fun ReadingCard(
+    reading: TelemetryReading,
+    nowMs: Long,
+    history: List<TelemetryHistoryItem>
+) {
     val stale = isReadingStale(nowMs, reading.lastUpdate)
     val bandColor = when (distanceBand(reading.distanceCm)) {
         DistanceBand.DANGER -> SosRed
@@ -464,14 +515,15 @@ private fun ReadingCard(reading: TelemetryReading, nowMs: Long) {
         DistanceBand.CLEAR -> ClearGreen
         DistanceBand.UNKNOWN -> MetaText
     }
+    val context = LocalContext.current
+    LaunchedEffect(reading.gpsFix, reading.latitude, reading.longitude) {
+        if (hasValidGps(reading.gpsFix, reading.latitude, reading.longitude)) {
+            rememberLocation(context, reading.latitude!!, reading.longitude!!)
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (reading.sosActive) {
-            Card(colors = CardDefaults.cardColors(containerColor = SosSoft), modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive }) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(stringResource(R.string.sos_active_alert), color = SosRed, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Text(stringResource(R.string.sos_detail), color = BodyText, fontSize = 16.sp)
-                }
-            }
+            SosMapCard(reading, history)
         } else {
             Text(stringResource(R.string.sos_inactive), color = BodyText, fontSize = 16.sp)
         }
@@ -506,8 +558,77 @@ private fun ReadingCard(reading: TelemetryReading, nowMs: Long) {
                 )
             }
         }
-        LocationMapCard(reading)
+        LiveGpsCard(reading)
     }
+}
+
+@Composable
+private fun SosMapCard(reading: TelemetryReading, history: List<TelemetryHistoryItem>) {
+    val context = LocalContext.current
+    val saved = remember { savedLocation(context) }
+    LaunchedEffect(reading.gpsFix, reading.latitude, reading.longitude, history.size) {
+        val live = if (hasValidGps(reading.gpsFix, reading.latitude, reading.longitude)) {
+            reading.latitude!! to reading.longitude!!
+        } else {
+            history.firstOrNull { hasValidGps(it.gpsFix, it.latitude, it.longitude) }
+                ?.let { it.latitude!! to it.longitude!! }
+        }
+        if (live != null) rememberLocation(context, live.first, live.second)
+    }
+    val pin = resolveSosPin(
+        reading.gpsFix,
+        reading.latitude,
+        reading.longitude,
+        history.map { Triple(it.gpsFix, it.latitude, it.longitude) },
+        saved?.first,
+        saved?.second
+    )
+    val caption = when (pin.kind) {
+        SosPinKind.LIVE -> R.string.sos_map_live
+        SosPinKind.LAST -> R.string.sos_map_last
+        SosPinKind.CAVANIS -> R.string.sos_map_cavanis
+    }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SosSoft),
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive }
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.sos_active_alert), color = SosRed, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text(stringResource(R.string.sos_detail), color = BodyText, fontSize = 16.sp)
+            Text(stringResource(caption), color = BodyText, fontSize = 16.sp)
+            EmbeddedLocationMap(
+                MapLocation(pin.latitude, pin.longitude),
+                Modifier
+                    .fillMaxWidth()
+                    .height(240.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                color = "#B91C1C"
+            )
+            MapButton(pin.latitude, pin.longitude)
+        }
+    }
+}
+
+@Composable
+private fun LiveGpsCard(reading: TelemetryReading) {
+    LocationMapCard(reading)
+}
+
+
+private fun savedLocation(context: android.content.Context): Pair<Double, Double>? {
+    val prefs = context.getSharedPreferences("smartvest_location", android.content.Context.MODE_PRIVATE)
+    if (!prefs.contains("lat")) return null
+    val latitude = Double.fromBits(prefs.getLong("lat", 0L))
+    val longitude = Double.fromBits(prefs.getLong("lon", 0L))
+    return if (hasValidGps(true, latitude, longitude)) latitude to longitude else null
+}
+
+private fun rememberLocation(context: android.content.Context, latitude: Double, longitude: Double) {
+    context.getSharedPreferences("smartvest_location", android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putLong("lat", latitude.toRawBits())
+        .putLong("lon", longitude.toRawBits())
+        .apply()
 }
 
 @Composable
@@ -516,12 +637,16 @@ private fun MapButton(latitude: Double, longitude: Double) {
     var unavailable by remember { mutableStateOf(false) }
     OutlinedButton(
         onClick = {
-            val uri = Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude")
-            val intent = Intent(Intent.ACTION_VIEW, uri)
+            val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude"))
+            val web = Intent(Intent.ACTION_VIEW, Uri.parse(mapSearchUrl(latitude, longitude)))
             try {
-                context.startActivity(intent)
+                context.startActivity(geo)
             } catch (_: ActivityNotFoundException) {
-                unavailable = true
+                try {
+                    context.startActivity(web)
+                } catch (_: ActivityNotFoundException) {
+                    unavailable = true
+                }
             }
         },
         modifier = Modifier

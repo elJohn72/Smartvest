@@ -9,6 +9,10 @@ import com.ajtecnology.smartvest.ui.classifyLoginFailure
 import com.ajtecnology.smartvest.ui.distanceBand
 import com.ajtecnology.smartvest.ui.distanceBandLabel
 import com.ajtecnology.smartvest.ui.gpsLabel
+import com.ajtecnology.smartvest.ui.mapEmbedUrl
+import com.ajtecnology.smartvest.ui.resolveSosPin
+import com.ajtecnology.smartvest.ui.SosPinKind
+import com.ajtecnology.smartvest.ui.CavanisLatitude
 import com.ajtecnology.smartvest.ui.hasValidGps
 import com.ajtecnology.smartvest.ui.historyAgeLabel
 import com.ajtecnology.smartvest.ui.isReadingStale
@@ -80,6 +84,31 @@ class MonitorStateLogicTest {
         assertEquals("Sin fijación", gpsLabel(true, null, null))
         assertFalse(hasValidGps(true, 95.0, 10.0))
         assertTrue(gpsLabel(true, 0.123456, -79.123456).startsWith("Fijación 0.12346, -79.12346"))
+        assertEquals(
+            "https://maps.google.com/maps?q=0.123456,-79.123456&z=16&output=embed",
+            mapEmbedUrl(0.123456, -79.123456)
+        )
+    }
+
+    @Test
+    fun testSosPinUsesLiveThenLastThenCavanis() {
+        val live = resolveSosPin(true, -0.25, -79.16, emptyList(), null, null)
+        assertEquals(SosPinKind.LIVE, live.kind)
+        val lastFromHistory = resolveSosPin(
+            false,
+            null,
+            null,
+            listOf(Triple(true, -0.30, -79.20)),
+            -0.10,
+            -79.10
+        )
+        assertEquals(SosPinKind.LAST, lastFromHistory.kind)
+        assertEquals(-0.30, lastFromHistory.latitude, 0.000001)
+        val lastSaved = resolveSosPin(false, null, null, emptyList(), -0.11, -79.11)
+        assertEquals(SosPinKind.LAST, lastSaved.kind)
+        val fallback = resolveSosPin(false, null, null, emptyList(), null, null)
+        assertEquals(SosPinKind.CAVANIS, fallback.kind)
+        assertEquals(CavanisLatitude, fallback.latitude, 0.000001)
     }
 
     @Test

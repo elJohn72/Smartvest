@@ -21,6 +21,11 @@ class ApiClient(
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
+    private val assistantClient = client.newBuilder()
+        .readTimeout(40, TimeUnit.SECONDS)
+        .callTimeout(45, TimeUnit.SECONDS)
+        .build()
+
     private val json = Json { ignoreUnknownKeys = true }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
@@ -297,6 +302,31 @@ class ApiClient(
             client.newCall(httpRequest).execute().use { response ->
                 if (response.isSuccessful) {
                     Result.success(Unit)
+                } else {
+                    Result.failure(httpFailure(response.code))
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun askAssistant(deviceId: String, request: AssistantRequest): Result<AssistantResponse> = withContext(Dispatchers.IO) {
+        try {
+            val token = sessionStore.getToken() ?: return@withContext Result.failure(IllegalStateException("No auth token"))
+            val body = json.encodeToString(request).toRequestBody(jsonMediaType)
+            val httpRequest = Request.Builder()
+                .url("$baseUrl/devices/$deviceId/assistant")
+                .header("Authorization", "Bearer $token")
+                .post(body)
+                .build()
+
+            assistantClient.newCall(httpRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    val respBody = response.body?.string() ?: ""
+                    Result.success(json.decodeFromString<AssistantResponse>(respBody))
                 } else {
                     Result.failure(httpFailure(response.code))
                 }

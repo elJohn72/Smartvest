@@ -116,3 +116,69 @@ data class ShareCreateResponse(
     val token: String,
     val publicUrl: String
 )
+
+@Serializable
+data class AssistantChatMessage(
+    val role: String,
+    val content: String
+)
+
+@Serializable
+data class AssistantRequest(
+    val action: String,
+    val messages: List<AssistantChatMessage>? = null
+)
+
+@Serializable
+data class AssistantLocation(
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val lastUpdate: Long = 0L,
+    val mapsUrl: String = ""
+)
+
+@Serializable
+data class AssistantPlace(
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val visitCount: Int = 0,
+    val avgDistanceCm: Double? = null,
+    val riskLevel: String = "bajo",
+    val lastSeenAt: Long = 0L,
+    val mapsUrl: String = ""
+)
+
+@Serializable
+data class AssistantSosEvent(
+    val at: Long = 0L,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val distanceCm: Double? = null
+)
+
+@Serializable
+data class AssistantAnalytics(
+    val riskScore: Int = 0,
+    val dailyRiskLevel: String = "bajo",
+    val deviceOnline: Boolean = false,
+    val connectionStatus: String = "offline",
+    val avgDistanceCm: Double? = null,
+    val dangerRatio: Double = 0.0,
+    val historyPoints: Int = 0,
+    val sosActiveNow: Boolean = false,
+    val sosCount: Int = 0,
+    val lastLocation: AssistantLocation? = null,
+    val frequentPlaces: List<AssistantPlace> = emptyList(),
+    val sosEvents: List<AssistantSosEvent> = emptyList()
+)
+
+@Serializable
+data class AssistantResponse(
+    val success: Boolean = false,
+    val analytics: AssistantAnalytics? = null,
+    val insights: String? = null,
+    val reply: String? = null,
+    val aiPowered: Boolean = false,
+    val aiModel: String? = null,
+    val message: String? = null
+)

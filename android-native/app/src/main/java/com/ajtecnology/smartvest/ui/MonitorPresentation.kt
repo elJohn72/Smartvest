@@ -59,6 +59,92 @@ fun gpsLabel(gpsFix: Boolean, latitude: Double?, longitude: Double?): String {
     return "Fijación $lat, $lon"
 }
 
+fun mapEmbedUrl(latitude: Double, longitude: Double): String {
+    val lat = String.format(Locale.US, "%.6f", latitude)
+    val lon = String.format(Locale.US, "%.6f", longitude)
+    return "https://maps.google.com/maps?q=$lat,$lon&z=16&output=embed"
+}
+
+fun mapSearchUrl(latitude: Double, longitude: Double): String {
+    val lat = String.format(Locale.US, "%.6f", latitude)
+    val lon = String.format(Locale.US, "%.6f", longitude)
+    return "https://maps.google.com/?q=$lat,$lon"
+}
+
+enum class SosPinKind {
+    LIVE,
+    LAST,
+    CAVANIS
+}
+
+data class SosPin(
+    val latitude: Double,
+    val longitude: Double,
+    val kind: SosPinKind
+)
+
+const val CavanisLatitude = -0.218470
+const val CavanisLongitude = -79.172546
+
+fun placeMapHtml(latitude: Double, longitude: Double, pinColor: String): String {
+    val lat = String.format(Locale.US, "%.6f", latitude)
+    val lon = String.format(Locale.US, "%.6f", longitude)
+    val color = if (pinColor.matches(Regex("#[0-9A-Fa-f]{6}"))) pinColor else "#B91C1C"
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <style>
+          html, body, #map { height: 100%; margin: 0; background: #F8FAFC; }
+          .leaflet-control-attribution { font-size: 10px; background: rgba(248,250,252,.9); }
+          .leaflet-bar a { background: #FFFFFF; color: #0F172A; border-bottom-color: #E2E8F0; }
+        </style>
+        </head>
+        <body>
+        <div id="map"></div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+          var map = L.map('map', { zoomControl: true }).setView([$lat, $lon], 16);
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+          }).addTo(map);
+          var icon = L.divIcon({
+            className: '',
+            html: '<div style="width:18px;height:18px;margin-left:5px;border-radius:50% 50% 50% 0;background:$color;border:3px solid #fff;transform:rotate(-45deg);box-shadow:0 1px 4px rgba(15,23,42,.35)"></div>',
+            iconSize: [28, 28],
+            iconAnchor: [14, 26]
+          });
+          L.marker([$lat, $lon], { icon: icon }).addTo(map);
+        </script>
+        </body>
+        </html>
+    """.trimIndent()
+}
+
+fun resolveSosPin(
+    gpsFix: Boolean,
+    latitude: Double?,
+    longitude: Double?,
+    history: List<Triple<Boolean, Double?, Double?>>,
+    savedLatitude: Double?,
+    savedLongitude: Double?
+): SosPin {
+    if (hasValidGps(gpsFix, latitude, longitude)) {
+        return SosPin(latitude!!, longitude!!, SosPinKind.LIVE)
+    }
+    val remembered = history.firstOrNull { (fix, lat, lon) -> hasValidGps(fix, lat, lon) }
+    if (remembered != null) {
+        return SosPin(remembered.second!!, remembered.third!!, SosPinKind.LAST)
+    }
+    if (hasValidGps(true, savedLatitude, savedLongitude)) {
+        return SosPin(savedLatitude!!, savedLongitude!!, SosPinKind.LAST)
+    }
+    return SosPin(CavanisLatitude, CavanisLongitude, SosPinKind.CAVANIS)
+}
+
 fun parseUtcMillis(recordedAt: String): Long? = try {
     Instant.parse(recordedAt).toEpochMilli()
 } catch (_: DateTimeParseException) {

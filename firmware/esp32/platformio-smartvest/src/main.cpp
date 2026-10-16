@@ -2,12 +2,14 @@
 #include "telemetry_outbox.h"
 #include "wifi_provision.h"
 #include <HTTPClient.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
 #if __has_include("smartvest_config.h")
 #include "smartvest_config.h"
 #endif
+#include "lab_ca.h"
 
 #ifndef SMARTVEST_DEVICE_ID
 #define SMARTVEST_DEVICE_ID "VEST-001"
@@ -91,6 +93,10 @@ struct AlertPattern {
 
 GpsState gpsState;
 String gpsLineBuffer;
+double lastLatitude = 0.0;
+double lastLongitude = 0.0;
+bool hasLastLocation = false;
+unsigned long lastLocationSaveMs = 0;
 
 float currentDistanceCm = 9999.0f;
 bool sosPressed = false;
@@ -148,6 +154,8 @@ float measureDistanceCm();
 float measureDistanceCmFiltered();
 void processGpsStream();
 bool parseGprmc(const String& line);
+bool parseGpgga(const String& line);
+bool applyGpsFix(const String& latRaw, const String& latHem, const String& lonRaw, const String& lonHem);
 double nmeaToDecimal(const String& raw, char hemisphere);
 ObstacleLevel getObstacleLevel(float distanceCm);
 const char* obstacleLevelToText(ObstacleLevel level);
@@ -164,6 +172,9 @@ void fillTelemetryMessage(TelemetryMessage& msg, unsigned long sequence, bool so
 void captureSosEdge();
 void printTelemetry();
 bool sendSms(const String& message);
+void loadSavedLocation();
+void rememberLocation(double latitude, double longitude);
+String buildSosSms();
 bool sendAtCommand(const char* command, const char* expected, unsigned long timeoutMs);
 String buildTelemetryJson();
 
@@ -183,20 +194,27 @@ void setup() {
 
   gpsSerial.begin(9600, SERIAL_8N1, Pins::gpsRx, Pins::gpsTx);
   gsmSerial.begin(9600, SERIAL_8N1, Pins::gsmRx, Pins::gsmTx);
+  loadSavedLocation();
+  Serial.println("SMARTVEST:GPS:uart");
 
   if (Pins::batteryAdc >= 0) {
     analogReadResolution(12);
     analogSetAttenuation(ADC_11db);
   }
 
-  WiFi.mode(WIFI_STA);
+  WiFi.persistent(false);
   startSmartVestWifiProvision();
 
   if (SMARTVEST_ENABLE_SIM800) {
-    delay(1500);
-    sendAtCommand("AT", "OK", 2000);
-    sendAtCommand("ATE0", "OK", 2000);
-    sendAtCommand("AT+CMGF=1", "OK", 2000);
+    delay(2000);
+    const bool gsmReady = sendAtCommand("AT", "OK", 2000) &&
+                          sendAtCommand("ATE0", "OK", 2000) &&
+                          sendAtCommand("AT+CMGF=1", "OK", 2000);
+    sendAtCommand("AT+CSQ", "OK", 2000);
+    sendAtCommand("AT+CREG?", "OK", 2000);
+    Serial.println(gsmReady ? "SMARTVEST:GSM:listo" : "SMARTVEST:GSM:sin_respuesta");
+  } else {
+    Serial.println("SMARTVEST:GSM:apagado");
   }
 
   // Generar bootId criptográfico único para este ciclo de encendido (UUID v4 format)
@@ -264,19 +282,7 @@ void loop() {
 
     if (SMARTVEST_ENABLE_SIM800 && smsQueue != nullptr) {
       SmsMessage smsMsg;
-      String message = String("ALERTA SOS SmartVest\n") +
-                       "deviceId: " + SMARTVEST_DEVICE_ID + "\n" +
-                       "Distancia: " + String(currentDistanceCm, 0) + " cm\n";
-
-      if (gpsState.fix) {
-        message += "Mapa: https://maps.google.com/?q=";
-        message += String(gpsState.latitude, 6);
-        message += ",";
-        message += String(gpsState.longitude, 6);
-      } else {
-        message += "GPS sin fix. Abre el perfil web del cuidador.";
-      }
-
+      const String message = buildSosSms();
       strncpy(smsMsg.text, message.c_str(), sizeof(smsMsg.text) - 1);
       smsMsg.text[sizeof(smsMsg.text) - 1] = '\0';
 
@@ -298,6 +304,7 @@ void loop() {
   }
 
   ensureWifiConnection();
+  smartVestAllowNewNetwork(now);
 
   if (now - lastTelemetryMs >= kTelemetryIntervalMs) {
     lastTelemetryMs = now;
@@ -321,7 +328,10 @@ float measureDistanceCm() {
   delayMicroseconds(10);
   digitalWrite(Pins::trig, LOW);
 
+  // El Wi-Fi interrumpe pulseIn y se pierde el eco. Sin interrupciones, el pulso se mide entero.
+  noInterrupts();
   const unsigned long duration = pulseIn(Pins::echo, HIGH, kUltrasonicTimeoutUs);
+  interrupts();
   if (duration == 0) {
     return 9999.0f;
   }
@@ -330,24 +340,8 @@ float measureDistanceCm() {
 }
 
 float measureDistanceCmFiltered() {
-  float samples[3] = {9999.0f, 9999.0f, 9999.0f};
-
-  for (int i = 0; i < 3; ++i) {
-    samples[i] = measureDistanceCm();
-    delayMicroseconds(120);
-  }
-
-  for (int i = 0; i < 2; ++i) {
-    for (int j = i + 1; j < 3; ++j) {
-      if (samples[j] < samples[i]) {
-        const float swap = samples[i];
-        samples[i] = samples[j];
-        samples[j] = swap;
-      }
-    }
-  }
-
-  return samples[1];
+  // Una sola lectura. Tres disparos seguidos dejan dos sin eco y el promedio apagaba el buzzer.
+  return measureDistanceCm();
 }
 
 void processGpsStream() {
@@ -366,11 +360,129 @@ void processGpsStream() {
       continue;
     }
 
+    if (gpsLineBuffer.length() > 120) {
+      gpsLineBuffer = "";
+      continue;
+    }
     gpsLineBuffer += c;
   }
 }
 
+bool applyGpsFix(const String& latRaw, const String& latHem, const String& lonRaw, const String& lonHem) {
+  if (latRaw.isEmpty() || latHem.isEmpty() || lonRaw.isEmpty() || lonHem.isEmpty()) {
+    return false;
+  }
+  const bool wasFixed = gpsState.fix;
+  gpsState.latitude = nmeaToDecimal(latRaw, latHem.charAt(0));
+  gpsState.longitude = nmeaToDecimal(lonRaw, lonHem.charAt(0));
+  gpsState.fix = true;
+  gpsState.lastSentenceMs = millis();
+  rememberLocation(gpsState.latitude, gpsState.longitude);
+  if (!wasFixed) {
+    Serial.println("SMARTVEST:GPS:fix");
+  }
+  return true;
+}
+
+void loadSavedLocation() {
+  Preferences prefs;
+  prefs.begin("smartvest", true);
+  hasLastLocation = prefs.getBool("gps_ok", false);
+  lastLatitude = prefs.getDouble("gps_lat", 0.0);
+  lastLongitude = prefs.getDouble("gps_lon", 0.0);
+  prefs.end();
+  if (!hasLastLocation || lastLatitude < -90.0 || lastLatitude > 90.0 || lastLongitude < -180.0 || lastLongitude > 180.0) {
+    hasLastLocation = false;
+    Serial.println("SMARTVEST:GPS:sin_ultima");
+    return;
+  }
+  Serial.println("SMARTVEST:GPS:ultima");
+}
+
+void rememberLocation(double latitude, double longitude) {
+  if (latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0) {
+    return;
+  }
+  lastLatitude = latitude;
+  lastLongitude = longitude;
+  hasLastLocation = true;
+
+  const unsigned long now = millis();
+  if (lastLocationSaveMs != 0 && now - lastLocationSaveMs < 15000UL) {
+    return;
+  }
+  lastLocationSaveMs = now;
+
+  Preferences prefs;
+  prefs.begin("smartvest", false);
+  prefs.putBool("gps_ok", true);
+  prefs.putDouble("gps_lat", latitude);
+  prefs.putDouble("gps_lon", longitude);
+  prefs.end();
+}
+
+String buildSosSms() {
+  String message = String("ALERTA SOS SmartVest\n") + SMARTVEST_DEVICE_ID + "\n";
+  if (currentDistanceCm < 9000.0f) {
+    message += String(currentDistanceCm, 0);
+    message += " cm\n";
+  }
+
+  double latitude = 0.0;
+  double longitude = 0.0;
+  bool live = false;
+  if (gpsState.fix) {
+    latitude = gpsState.latitude;
+    longitude = gpsState.longitude;
+    live = true;
+  } else if (hasLastLocation) {
+    latitude = lastLatitude;
+    longitude = lastLongitude;
+    message += "Ultima ubicacion\n";
+  } else {
+    message += "Sin ubicacion registrada.";
+    Serial.println("SMARTVEST:SMS:sin_ubicacion");
+    return message;
+  }
+
+  message += "https://maps.google.com/?q=";
+  message += String(latitude, 6);
+  message += ",";
+  message += String(longitude, 6);
+  Serial.println(live ? "SMARTVEST:SMS:ubicacion_viva" : "SMARTVEST:SMS:ultima_ubicacion");
+  return message;
+}
+
+bool parseGpgga(const String& line) {
+  if (!line.startsWith("$GPGGA") && !line.startsWith("$GNGGA")) {
+    return false;
+  }
+
+  String fields[16];
+  int fieldCount = 0;
+  int start = 0;
+  for (int i = 0; i <= line.length() && fieldCount < 16; ++i) {
+    if (i == line.length() || line.charAt(i) == ',') {
+      fields[fieldCount++] = line.substring(start, i);
+      start = i + 1;
+    }
+  }
+  if (fieldCount < 7) {
+    return false;
+  }
+  const int quality = fields[6].toInt();
+  if (quality <= 0) {
+    gpsState.fix = false;
+    gpsState.lastSentenceMs = millis();
+    return true;
+  }
+  return applyGpsFix(fields[2], fields[3], fields[4], fields[5]);
+}
+
 bool parseGprmc(const String& line) {
+  if (line.startsWith("$GPGGA") || line.startsWith("$GNGGA")) {
+    return parseGpgga(line);
+  }
   if (!line.startsWith("$GPRMC") && !line.startsWith("$GNRMC")) {
     return false;
   }
@@ -391,20 +503,17 @@ bool parseGprmc(const String& line) {
   }
 
   const bool validFix = fields[2] == "A";
-  gpsState.fix = validFix;
   gpsState.lastSentenceMs = millis();
 
   if (!validFix) {
+    gpsState.fix = false;
     return true;
   }
 
-  if (fields[3].isEmpty() || fields[4].isEmpty() || fields[5].isEmpty() || fields[6].isEmpty()) {
+  if (!applyGpsFix(fields[3], fields[4], fields[5], fields[6])) {
     gpsState.fix = false;
     return false;
   }
-
-  gpsState.latitude = nmeaToDecimal(fields[3], fields[4].charAt(0));
-  gpsState.longitude = nmeaToDecimal(fields[5], fields[6].charAt(0));
   return true;
 }
 
@@ -674,6 +783,11 @@ TelemetryHttpClass sendTelemetryHttp(const TelemetryMessage& msg) {
 
   bool isHttps = (strncmp(SMARTVEST_API_URL, "https://", 8) == 0);
 
+  if (isHttps && time(nullptr) < 1791936000L) {
+    Serial.println("SMARTVEST:HTTPS:espera_hora");
+    return TELEMETRY_HTTP_TRANSIENT;
+  }
+
   if (isHttps) {
 #if defined(SMARTVEST_CA_CERT_PEM)
     if (strlen(SMARTVEST_CA_CERT_PEM) == 0) {
@@ -716,6 +830,9 @@ TelemetryHttpClass sendTelemetryHttp(const TelemetryMessage& msg) {
                    "}";
 
   const int responseCode = http.POST(payload);
+  if (responseCode == 200 || responseCode == 202) {
+    smartVestNoteLabReachable();
+  }
   if (responseCode > 0) {
     Serial.printf("Telemetry HTTP v1 [%lu] -> %d\n", msg.sequence, responseCode);
   } else {
@@ -769,27 +886,32 @@ bool sendSms(const String& message) {
     gsmSerial.read();
   }
 
-  Serial.print("SMS destino: ");
-  Serial.println(SMARTVEST_SOS_PHONE);
+  String command = String("AT+CMGS=\"") + SMARTVEST_SOS_PHONE + "\"";
+  if (!sendAtCommand(command.c_str(), ">", 8000)) {
+    Serial.println("SMARTVEST:SMS:sin_prompt");
+    return false;
+  }
 
-  gsmSerial.print("AT+CMGS=\"");
-  gsmSerial.print(SMARTVEST_SOS_PHONE);
-  gsmSerial.print("\"\r");
+  gsmSerial.print(message);
+  gsmSerial.write(26);
 
-  unsigned long startMs = millis();
-  while (millis() - startMs < 15000UL) {
-    if (gsmSerial.find(">")) {
-      gsmSerial.print(message);
-      gsmSerial.write(26);
-      if (gsmSerial.find("OK")) {
+  const unsigned long startMs = millis();
+  String response;
+  while (millis() - startMs < 20000UL) {
+    while (gsmSerial.available()) {
+      response += static_cast<char>(gsmSerial.read());
+      if (response.indexOf("+CMGS:") >= 0 || response.indexOf("OK") >= 0) {
+        Serial.println("SMARTVEST:SMS:ok");
         return true;
       }
-      Serial.println("SMS: envio sin confirmacion OK");
-      return false;
+      if (response.indexOf("ERROR") >= 0) {
+        Serial.println("SMARTVEST:SMS:fallo");
+        return false;
+      }
     }
   }
 
-  Serial.println("SMS: timeout esperando prompt >");
+  Serial.println("SMARTVEST:SMS:timeout");
   return false;
 }
 
